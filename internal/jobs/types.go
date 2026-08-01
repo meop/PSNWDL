@@ -10,7 +10,6 @@ const (
 	StatePaused      JobState = "paused"
 	StateResuming    JobState = "resuming"
 	StateVerifying   JobState = "verifying"
-	StateInstalling  JobState = "installing"
 	StateDone        JobState = "done"
 	StateFailed      JobState = "failed"
 	StateCanceled    JobState = "canceled"
@@ -26,8 +25,7 @@ const (
 	KindFirmware           = "firmware"
 )
 
-// Job is a single download+verify unit. Installing is a separate explicit
-// action (Queue.Install / App.InstallJob); there is no auto-install chain.
+// Job is a single download+verify unit; there is no auto-install chain.
 type Job struct {
 	ID          string     `json:"id"`
 	TitleID     string     `json:"title_id"`
@@ -40,7 +38,6 @@ type Job struct {
 	State       JobState   `json:"state"`
 	Downloaded  int64      `json:"downloaded"`
 	Error       string     `json:"error,omitempty"`
-	InstalledTo string     `json:"installed_to,omitempty"`
 	Throughput  float64    `json:"throughput,omitempty"`
 	ETA         int64      `json:"eta,omitempty"`
 	Attempt     int        `json:"attempt,omitempty"`

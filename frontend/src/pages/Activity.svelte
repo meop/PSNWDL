@@ -17,7 +17,7 @@
   let paused = $state(false)
   let queueError = $state<string | null>(null)
   let logContainer: HTMLElement
-  const ACTIVE_JOB_STATES = new Set(['queued', 'downloading', 'paused', 'resuming', 'verifying', 'installing'])
+  const ACTIVE_JOB_STATES = new Set(['queued', 'downloading', 'paused', 'resuming', 'verifying'])
   let activeJobs = $derived($jobsList.filter((job) => ACTIVE_JOB_STATES.has(String(job.state))))
 
   async function clearLog() {

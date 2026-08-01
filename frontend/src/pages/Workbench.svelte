@@ -1,16 +1,16 @@
 <script lang="ts">
-  import { onMount } from 'svelte'
+  import { onMount, untrack } from 'svelte'
   import type { Mode } from '../app/types'
   import {
     AutoDetectGamesYML,
     DeleteLibraryItems,
     EnqueueDownload,
-    InstallFolderPS3,
-    InstallJob,
+    InstallLibraryPS3,
     ListDownloadLibrary,
+    ListRPCS3Library,
     OpenFolder,
-    PickDirectory,
-    ReconcileLibraryPS3,
+    PendingLibraryInstallsPS3,
+    ReconcileTitlePS3,
     SearchPS3,
     SearchPS4,
     SearchVita,
@@ -22,7 +22,7 @@
   import * as psn from '../../bindings/PSNWDL/internal/psn'
   import type * as config from '../../bindings/PSNWDL/internal/config'
   import type * as downloads from '../../bindings/PSNWDL/internal/downloads'
-  import type * as library from '../../bindings/PSNWDL/internal/library'
+  import * as library from '../../bindings/PSNWDL/internal/library'
   import { cache, ensureFirmware, fetching } from '../app/firmwareStore.svelte'
   import { jobsList } from '../app/jobsStore.svelte'
   import { libraryState as emulatorState } from '../app/libraryStore.svelte'
@@ -43,18 +43,28 @@
   const EMULATOR_COLUMN_LABELS = ['Title', 'Status', 'Action']
 
   let { mode, defaultDownload = 'firmware', appConfig }: Props = $props()
+  const initialMode = untrack(() => mode)
+  const initialDefaultDownload = untrack(() => defaultDownload)
 
-  let source = $state<Source>('firmware')
+  let sourceByMode = $state<Record<Mode, Source>>({
+    ps3: normalizedSource(initialDefaultDownload, 'ps3'),
+    ps4: normalizedSource(initialDefaultDownload, 'ps4'),
+    ps5: 'firmware',
+    psvita: normalizedSource(initialDefaultDownload, 'psvita'),
+  })
+  let source = $state<Source>(sourceByMode[initialMode])
   let downloadError = $state<string | null>(null)
   let emulatorError = $state<string | null>(null)
   let syncingAll = $state(false)
   let emulatorSyncJobIDs = $state<string[]>([])
-  let emulatorInstallJobIDs = $state<string[]>([])
-  let installingDone = $state(false)
-  let installingFolder = $state(false)
+  let installingDownloads = $state(false)
+  let pendingInstallCount = $state(0)
+  let pendingInstallError = $state<string | null>(null)
+  let pendingInstallGeneration = 0
   let includeDRMFree = $state(false)
-  let lastMode = $state<Mode>('ps3')
-  let emulatorConfigKey = $state('')
+  let lastMode = $state<Mode>(initialMode)
+  let emulatorRefreshing = $state(false)
+  let emulatorRefreshGeneration = 0
   let expandedLibraryTitles = $state<Record<string, boolean>>({})
   let downloadColumnWidths = $state([100, 90, 180, 80, 120])
   let emulatorColumnWidths = $state([260, 150, 120])
@@ -68,25 +78,15 @@
   let downloadColumnLabels = $derived(['Kind', 'Version', source === 'firmware' ? 'Locale' : 'Scope', 'Size', 'Action'])
   let firmwareLoading = $derived($fetching === mode && !cachedFirmware?.list)
   let selectedLibraryCount = $derived(libraryState.selected.length)
-  let finishedPS3Jobs = $derived(
-    $jobsList.filter(
-      (job) => job.mode === 'ps3' && (job.kind || 'title_update') !== 'firmware' && job.state === 'done' && !job.installed_to
-    )
-  )
-
   $effect(() => {
     if (mode !== lastMode) {
-      source = normalizedSource(defaultDownload, mode)
-      if (mode !== 'ps3') includeDRMFree = false
+      sourceByMode[lastMode] = source
+      source = sourceByMode[mode]
       libraryState.selected = []
       lastMode = mode
-      if (mode === 'ps3' && emulatorState.initialized) void refreshEmulator()
+      void refreshLibrary()
     }
     downloadError = null
-  })
-
-  $effect(() => {
-    source = normalizedSource(defaultDownload, mode)
   })
 
   onMount(async () => {
@@ -99,27 +99,8 @@
 
   $effect(() => {
     if (!emulatorState.initialized) return
-    const nextKey = emulatorConfigSignature(appConfig)
     hydrateEmulatorConfig(appConfig)
-    if (nextKey === emulatorConfigKey) return
-    emulatorConfigKey = nextKey
-    if (mode === 'ps3') void refreshEmulator()
-  })
-
-  $effect(() => {
-    const trackedIDs = emulatorInstallJobIDs
-    if (trackedIDs.length === 0) return
-
-    const trackedJobs = trackedIDs.map((id) => $jobsList.find((job) => job.id === id))
-    if (trackedJobs.some((job) => !job)) return
-    const finished = trackedJobs.every(
-      (job) => job?.state === 'failed' || job?.state === 'canceled' || (job?.state === 'done' && !!job.installed_to)
-    )
-    if (!finished) return
-
-    emulatorInstallJobIDs = []
-    installingDone = false
-    if (mode === 'ps3') void refreshEmulator()
+    void refreshPendingInstalls()
   })
 
   $effect(() => {
@@ -128,6 +109,8 @@
         libraryState.titles = Array.isArray(next) ? next : []
         libraryState.loading = false
         pruneLibrarySelection()
+        refreshCachedEmulatorRows()
+        void refreshPendingInstalls()
       }),
       Events.On('downloads:error', ({ data: msg }) => {
         libraryState.error = msg
@@ -147,7 +130,6 @@
     }
 
     emulatorSyncJobIDs = []
-    if (mode === 'ps3') void refreshEmulator()
   })
 
   let allDownloadRows = $derived.by(() => {
@@ -213,24 +195,20 @@
   let modeLibraryTitles = $derived(libraryState.titles.filter((title) => title.mode === mode))
   let firmwareLibraryTitles = $derived(modeLibraryTitles.filter((title) => title.title_id === 'firmware'))
   let gameLibraryTitles = $derived(modeLibraryTitles.filter((title) => title.title_id !== 'firmware'))
+  let firmwareLibraryRoot = $derived(firmwareLibraryTitles.length > 0 ? parentPath(firmwareLibraryTitles[0].path) : '')
+  let titleLibraryRoot = $derived(gameLibraryTitles.length > 0 ? parentPath(gameLibraryTitles[0].path) : '')
 
   async function ensureEmulatorBooted() {
     if (emulatorState.initialized) return
     hydrateEmulatorConfig(appConfig)
-    emulatorConfigKey = emulatorConfigSignature(appConfig)
     emulatorState.detectedPath = await AutoDetectGamesYML()
     emulatorState.initialized = true
-    if (mode === 'ps3') await refreshEmulator()
   }
 
   function hydrateEmulatorConfig(next: config.Config) {
     emulatorState.cfg = next
     emulatorState.gamesYMLInput = next.rpcs3.games_yml
     emulatorState.hdd0Input = next.rpcs3.hdd0_game
-  }
-
-  function emulatorConfigSignature(next: config.Config): string {
-    return `${next.rpcs3.games_yml}\0${next.storage.library_dir}`
   }
 
   async function searchTitle() {
@@ -311,6 +289,8 @@
     try {
       libraryState.titles = (await ListDownloadLibrary()) ?? []
       pruneLibrarySelection()
+      refreshCachedEmulatorRows()
+      void refreshPendingInstalls()
     } catch (e) {
       libraryState.error = e instanceof Error ? e.message : String(e)
       libraryState.titles = []
@@ -341,16 +321,57 @@
       emulatorState.loadError = null
       return
     }
-    emulatorState.loading = true
+    const generation = ++emulatorRefreshGeneration
+    emulatorRefreshing = true
+    emulatorState.loading = emulatorState.rows.length === 0
     emulatorState.loadError = null
     emulatorError = null
     try {
-      emulatorState.rows = (await ReconcileLibraryPS3()) ?? []
-    } catch (e) {
-      emulatorState.rows = []
-      emulatorState.loadError = e instanceof Error ? e.message : String(e)
-    } finally {
+      const entries = (await ListRPCS3Library()) ?? []
+      if (generation !== emulatorRefreshGeneration) return
+      emulatorState.rows = entries.map(
+        (entry) =>
+          new library.Row({
+            title_id: entry.title_id,
+            install_dir: entry.install_dir,
+            status: library.Status.StatusChecking,
+            downloaded_count: 0,
+            update_count: 0,
+          })
+      )
       emulatorState.loading = false
+      await Promise.all(
+        entries.map(async (entry) => {
+          try {
+            const row = await ReconcileTitlePS3(entry)
+            if (generation !== emulatorRefreshGeneration) return
+            emulatorState.rows = emulatorState.rows.map((current) =>
+              current.title_id === row.title_id ? applyLibraryStateToRow(row) : current
+            )
+          } catch (e) {
+            if (generation !== emulatorRefreshGeneration) return
+            emulatorState.rows = emulatorState.rows.map((current) =>
+              current.title_id === entry.title_id
+                ? new library.Row({
+                    ...current,
+                    status: library.Status.StatusUnreachable,
+                    error: e instanceof Error ? e.message : String(e),
+                  })
+                : current
+            )
+          }
+        })
+      )
+    } catch (e) {
+      if (generation === emulatorRefreshGeneration) {
+        emulatorState.rows = []
+        emulatorState.loadError = e instanceof Error ? e.message : String(e)
+      }
+    } finally {
+      if (generation === emulatorRefreshGeneration) {
+        emulatorState.loading = false
+        emulatorRefreshing = false
+      }
     }
   }
 
@@ -359,7 +380,6 @@
     try {
       const jobIDs = (await SyncTitlePS3(titleID)) ?? []
       trackEmulatorJobs(jobIDs)
-      if (jobIDs.length === 0) await refreshEmulator()
     } catch (e) {
       emulatorError = e instanceof Error ? e.message : String(e)
     }
@@ -371,7 +391,6 @@
     try {
       const jobIDs = (await SyncAllPS3()) ?? []
       trackEmulatorJobs(jobIDs)
-      if (jobIDs.length === 0) await refreshEmulator()
     } catch (e) {
       emulatorError = e instanceof Error ? e.message : String(e)
     } finally {
@@ -379,35 +398,36 @@
     }
   }
 
-  async function installFinishedPS3Jobs() {
-    if (finishedPS3Jobs.length === 0) return
-    installingDone = true
-    emulatorInstallJobIDs = finishedPS3Jobs.map((job) => job.id)
+  async function installLibraryDownloads() {
+    if (pendingInstallCount === 0 || isMissingInstallConfig()) return
+    installingDownloads = true
     emulatorError = null
     try {
-      for (const job of finishedPS3Jobs) {
-        await InstallJob(job.id)
-      }
-    } catch (e) {
-      emulatorInstallJobIDs = []
-      installingDone = false
-      emulatorError = e instanceof Error ? e.message : String(e)
-    }
-  }
-
-  async function installPKGFolder() {
-    if (!emulatorState.cfg || isMissingInstallConfig()) return
-    const picked = await PickDirectory('Select PS3 PKG folder', emulatorState.cfg.storage.library_dir)
-    if (!picked) return
-    installingFolder = true
-    emulatorError = null
-    try {
-      await InstallFolderPS3(picked, emulatorState.hdd0Input)
-      await refreshEmulator()
+      await InstallLibraryPS3()
     } catch (e) {
       emulatorError = e instanceof Error ? e.message : String(e)
     } finally {
-      installingFolder = false
+      await refreshPendingInstalls()
+      installingDownloads = false
+    }
+  }
+
+  async function refreshPendingInstalls() {
+    const generation = ++pendingInstallGeneration
+    if (!emulatorState.initialized || isMissingInstallConfig()) {
+      pendingInstallCount = 0
+      pendingInstallError = null
+      return
+    }
+    try {
+      const count = await PendingLibraryInstallsPS3()
+      if (generation !== pendingInstallGeneration) return
+      pendingInstallCount = count
+      pendingInstallError = null
+    } catch (e) {
+      if (generation !== pendingInstallGeneration) return
+      pendingInstallCount = 0
+      pendingInstallError = e instanceof Error ? e.message : String(e)
     }
   }
 
@@ -438,6 +458,35 @@
     if (!cachedTitle) return false
     const version = row.kind === 'DRM-free' ? `${row.version}_drm_free` : row.version
     return (cachedTitle.files ?? []).some((file) => file.version === version)
+  }
+
+  function applyLibraryStateToRow(row: library.Row): library.Row {
+    const updates = row.updates ?? []
+    if (updates.length === 0 && row.status !== library.Status.StatusNoUpdates) return row
+    const uniqueUpdates = [...new Map(updates.map((update) => [update.version, update])).values()]
+    const localFiles =
+      libraryState.titles.find((title) => title.mode === 'ps3' && title.title_id === row.title_id)?.files ?? []
+    const downloadedCount = uniqueUpdates.filter((update) =>
+      localFiles.some((file) => file.version === update.version && (!update.size || file.size === update.size))
+    ).length
+    return new library.Row({
+      ...row,
+      downloaded_count: downloadedCount,
+      update_count: uniqueUpdates.length,
+      status: statusForDownloadCounts(downloadedCount, uniqueUpdates.length),
+    })
+  }
+
+  function refreshCachedEmulatorRows() {
+    if (emulatorState.rows.length === 0) return
+    emulatorState.rows = emulatorState.rows.map(applyLibraryStateToRow)
+  }
+
+  function statusForDownloadCounts(downloadedCount: number, updateCount: number): library.Status {
+    if (updateCount === 0) return library.Status.StatusNoUpdates
+    if (downloadedCount === 0) return library.Status.StatusNoneDownloaded
+    if (downloadedCount < updateCount) return library.Status.StatusSomeDownloaded
+    return library.Status.StatusAllDownloaded
   }
 
   function isMissingGamesConfig(): boolean {
@@ -520,6 +569,18 @@
     )
   }
 
+  function canSyncRow(row: library.Row): boolean {
+    return row.status !== library.Status.StatusChecking &&
+      row.status !== library.Status.StatusUnreachable &&
+      row.downloaded_count < row.update_count
+  }
+
+  function syncActionLabel(row: library.Row): string {
+    if (titleDownloadInProgress(row.title_id)) return 'Syncing'
+    if (row.status === library.Status.StatusAllDownloaded || row.status === library.Status.StatusNoUpdates) return 'Synced'
+    return 'Sync'
+  }
+
   function measureColumns(event: Event, table: 'download' | 'emulator'): { widths: number[]; total: number } {
     const tableElement = (event.currentTarget as HTMLElement).closest('table')
     const cells = tableElement ? Array.from(tableElement.querySelectorAll<HTMLTableCellElement>('thead th')) : []
@@ -600,7 +661,13 @@
     return `${version} · ${formatSize(file.size)}`
   }
 
+  function parentPath(path: string): string {
+    const index = Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'))
+    return index > 0 ? path.slice(0, index) : path
+  }
+
   const STATUS_BADGE: Record<string, string> = {
+    checking: 'bg-surface-2 text-muted',
     all_downloaded: 'bg-success-bg text-success-fg',
     some_downloaded: 'bg-warn-bg text-warn-fg',
     none_downloaded: 'bg-error-bg text-error-fg',
@@ -609,6 +676,7 @@
   }
 
   const STATUS_LABEL: Record<string, string> = {
+    checking: 'Checking',
     all_downloaded: 'All downloaded',
     some_downloaded: 'Some downloaded',
     none_downloaded: 'None downloaded',
@@ -711,7 +779,7 @@
                     disabled={isQueued(row) || downloaded(row)}
                     class="btn btn-secondary w-24 justify-center"
                   >
-                    {downloaded(row) ? 'Downloaded' : isQueued(row) ? 'In progress' : 'Download'}
+                    {downloaded(row) ? 'Downloaded' : isQueued(row) ? 'Downloading' : 'Download'}
                   </button>
                 </td>
               </tr>
@@ -739,23 +807,17 @@
             {syncingAll ? 'Syncing all' : 'Sync all'}
           </button>
           <button
-            onclick={installFinishedPS3Jobs}
-            disabled={installingDone || finishedPS3Jobs.length === 0 || isMissingInstallConfig()}
+            onclick={installLibraryDownloads}
+            disabled={installingDownloads || pendingInstallCount === 0 || isMissingInstallConfig()}
             class="btn btn-secondary"
-            title="Install all completed PS3 update downloads into RPCS3"
+            title={pendingInstallError || (pendingInstallCount > 0
+              ? `Install ${pendingInstallCount} downloaded Library package(s) newer than RPCS3's installed versions`
+              : 'No downloaded Library packages need installation')}
           >
-            {installingDone ? 'Installing downloads' : 'Install downloads'}
+            {installingDownloads ? 'Installing downloads' : 'Install downloads'}
           </button>
-          <button
-            onclick={installPKGFolder}
-            disabled={installingFolder || isMissingInstallConfig()}
-            class="btn btn-secondary"
-            title="Choose a folder of PS3 pkg files and install them into RPCS3"
-          >
-            {installingFolder ? 'Installing folder' : 'Install pkg folder'}
-          </button>
-          <button onclick={refreshEmulator} disabled={emulatorState.loading || isMissingGamesConfig()} class="btn btn-secondary">
-            Refresh
+          <button onclick={refreshEmulator} disabled={emulatorRefreshing || isMissingGamesConfig()} class="btn btn-secondary">
+            {emulatorRefreshing ? 'Refreshing' : 'Refresh'}
           </button>
         </div>
       {/if}
@@ -766,13 +828,14 @@
     {:else if !emulatorState.cfg}
       <div class="empty">Loading emulator settings</div>
     {:else}
-      {#if isMissingGamesConfig() || isMissingInstallConfig() || emulatorState.loadError || emulatorError}
+      {#if isMissingGamesConfig() || isMissingInstallConfig() || emulatorState.loadError || emulatorError || pendingInstallError}
         <div class="border-b border-error/40 bg-error-bg px-3 py-2 text-xs text-error-fg">
           {#if !emulatorState.gamesYMLInput}<div>Invalid setting: games.yml</div>{/if}
           {#if !emulatorState.hdd0Input}<div>Invalid setting: dev_hdd0/game</div>{/if}
           {#if !isMissingGamesConfig() && (emulatorState.loadError || emulatorError)}
             <div>{emulatorState.loadError || emulatorError}</div>
           {/if}
+          {#if pendingInstallError}<div>{pendingInstallError}</div>{/if}
         </div>
       {/if}
 
@@ -820,10 +883,10 @@
                   <td>
                     <button
                       onclick={() => syncTitle(row.title_id)}
-                      disabled={row.downloaded_count >= row.update_count || titleDownloadInProgress(row.title_id)}
+                      disabled={!canSyncRow(row) || titleDownloadInProgress(row.title_id)}
                       class="btn btn-secondary w-20 justify-center"
                     >
-                      {titleDownloadInProgress(row.title_id) ? 'Syncing' : 'Sync'}
+                      {syncActionLabel(row)}
                     </button>
                   </td>
                 </tr>
@@ -884,9 +947,12 @@
                     aria-label={`Select ${mode} firmware`}
                     onchange={(event) => toggleFiles(firmwareFiles, event.currentTarget.checked)}
                   />
-                  <span class="font-mono font-semibold text-fg">firmware</span>
+                  <div class="min-w-0">
+                    <div class="font-mono font-semibold text-fg">firmware</div>
+                    <div class="truncate font-mono text-muted-soft" title={firmwareLibraryRoot}>{firmwareLibraryRoot}</div>
+                  </div>
                   <span class="text-muted">{firmwareLibraryTitles.length} locales · {formatSize(totalFileSize(firmwareFiles))}</span>
-                  <span></span>
+                  <button onclick={() => OpenFolder(firmwareLibraryRoot)} class="btn btn-secondary">Open</button>
                 </div>
 
                 {#if titleExpanded(firmwareKey)}
@@ -970,9 +1036,12 @@
                     aria-label={`Select ${mode} titles`}
                     onchange={(event) => toggleFiles(titleFiles, event.currentTarget.checked)}
                   />
-                  <span class="font-mono font-semibold text-fg">title</span>
+                  <div class="min-w-0">
+                    <div class="font-mono font-semibold text-fg">title</div>
+                    <div class="truncate font-mono text-muted-soft" title={titleLibraryRoot}>{titleLibraryRoot}</div>
+                  </div>
                   <span class="text-muted">{gameLibraryTitles.length} folders · {formatSize(totalFileSize(titleFiles))}</span>
-                  <span></span>
+                  <button onclick={() => OpenFolder(titleLibraryRoot)} class="btn btn-secondary">Open</button>
                 </div>
 
                 {#if titleExpanded(titleKey)}

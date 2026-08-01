@@ -32,10 +32,8 @@ RPCS3 `dev_hdd0/game` tree — but the PKGs themselves are unmodified.
 - **RPCS3 library synchronization (PS3 only)** — compares every server package
   for each RPCS3 title with the download library, reports none/some/all
   downloaded, removes unexpected packages, and downloads missing ones.
-- **PyKG-style batch install (PS3)** — point the app at a folder of local PS3
-  `.pkg` files you are entitled to use; it discovers them recursively, groups
-  by title, orders by version, and streams the extracts into `dev_hdd0/game`,
-  stopping a title's group on first failure.
+- **RPCS3 Library install (PS3)** — detects downloaded Library packages newer
+  than RPCS3's installed versions and installs them in version order.
 - **Activity** — live active-job controls plus a log of every fetch, reconcile,
   download, verify, and extract, filterable by scope (`psn` / `jobs` /
   `library` / `pkg`).
@@ -64,7 +62,7 @@ activity log, and RPCS3 reconcile/download/install flow.
 | Fixed cache/library view | No | No | Yes |
 | RPCS3 installed-title reconcile | Partial | No | Yes |
 | Queue missing RPCS3 updates | Partial | No | Yes |
-| Recursive PS3 PKG folder install | No | Yes | Yes |
+| Install downloaded Library PS3 PKGs | No | Yes | Yes |
 | PARAM.SFO metadata parsing | No | Yes | Yes |
 | Retail/debug PS3 NPDRM extraction | No | Yes | Yes |
 | Folder naming format options | Yes | No | No; fixed cache layout by design |
@@ -92,8 +90,6 @@ go install github.com/wailsapp/wails/v3/cmd/wails3@latest
   `games.yml` plus `dev_hdd0/game` paths (set in Settings).
 - **No prerequisites for PS4/Vita/PS5** — those only fetch and cache the
   signed packages; they are not extracted.
-- **For local PS3 PKG folder install**, PSNWDL follows PyKG's model: it scans a
-  folder you choose. The app does not create or dump those package files.
 
 ---
 

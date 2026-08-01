@@ -285,12 +285,6 @@ func (a *App) DeleteLibraryItems(paths []string) error {
 	return nil
 }
 
-// InstallJob extracts a finished download into the configured RPCS3
-// dev_hdd0/game path. PS3-only.
-func (a *App) InstallJob(id string) error {
-	return a.jobs.Install(id, a.cfg.RPCS3.HDD0Game)
-}
-
 // AutoDetectGamesYML returns the first detected RPCS3 games.yml path on this
 // system, or empty string if none of the common locations exist.
 func (a *App) AutoDetectGamesYML() string {
@@ -312,33 +306,14 @@ func (a *App) ListRPCS3Library() ([]rpcs3.Entry, error) {
 	return rpcs3.ParseGamesYML(path)
 }
 
-// ReconcileLibraryPS3 compares every server package for each RPCS3 title with
-// the exact files present in the download library.
-func (a *App) ReconcileLibraryPS3() ([]library.Row, error) {
-	entries, err := a.ListRPCS3Library()
-	if err != nil {
-		return []library.Row{}, err
+// ReconcileTitlePS3 resolves one already-parsed RPCS3 row so the frontend can
+// publish the local games.yml list immediately and fill server state per row.
+func (a *App) ReconcileTitlePS3(entry rpcs3.Entry) library.Row {
+	row := library.ReconcileTitlePS3(a.ctx, entry, a.psn, a.cfg.Storage.LibraryDir)
+	if row.Status == library.StatusUnreachable {
+		a.activity.Warnf("library", "%s: reconcile failed (%s)", row.TitleID, row.Error)
 	}
-	a.activity.Infof("library", "Reconciling %d title(s) against PSN…", len(entries))
-	rows := library.ReconcilePS3(a.ctx, entries, a.psn, a.cfg.Storage.LibraryDir)
-
-	all, some, none, unreachable := 0, 0, 0, 0
-	for _, r := range rows {
-		switch r.Status {
-		case library.StatusAllDownloaded:
-			all++
-		case library.StatusSomeDownloaded:
-			some++
-		case library.StatusNoneDownloaded:
-			none++
-		case library.StatusUnreachable:
-			unreachable++
-			a.activity.Warnf("library", "%s: server unreachable (%s)", r.TitleID, r.Error)
-		}
-	}
-	a.activity.Infof("library", "Reconcile complete: %d all downloaded, %d partial, %d none downloaded, %d unreachable",
-		all, some, none, unreachable)
-	return rows, nil
+	return row
 }
 
 // SyncTitlePS3 makes one RPCS3 title folder exactly match the packages
@@ -501,51 +476,94 @@ func (a *App) OpenFolder(path string) error {
 	return cmd.Start()
 }
 
-// InstallFolderPS3 discovers PKGs in `root`, groups them by TitleID,
-// orders by version ascending, and installs each group in order, skipping
-// a title's remaining versions if any earlier one fails.
-func (a *App) InstallFolderPS3(root, hdd0Game string) error {
-	if hdd0Game == "" {
-		return fmt.Errorf("dev_hdd0/game path not set")
-	}
+func (a *App) PendingLibraryInstallsPS3() (int, error) {
+	pkgs, err := a.pendingLibraryPackagesPS3()
+	return len(pkgs), err
+}
 
-	pkgs, err := pkg.DiscoverPKGs(root)
-	if err != nil && len(pkgs) == 0 {
-		a.activity.Errorf("pkg", "Discover failed: %v", err)
-		return fmt.Errorf("discover pkgs: %w", err)
+// InstallLibraryPS3 installs only downloaded Library packages newer than the
+// version currently present in RPCS3.
+func (a *App) InstallLibraryPS3() (int, error) {
+	pkgs, err := a.pendingLibraryPackagesPS3()
+	if err != nil {
+		return 0, err
 	}
-
-	a.activity.Infof("pkg", "Discovered %d PKG(s) in %s", len(pkgs), root)
 	if len(pkgs) == 0 {
-		return fmt.Errorf("no pkgs found in %s", root)
+		return 0, nil
 	}
 
+	hdd0Game := a.cfg.RPCS3.HDD0Game
 	groups := pkg.OrderForBatchInstall(pkgs)
-	a.activity.Infof("pkg", "Grouped into %d title(s)", len(groups))
-
+	installed := 0
+	var installErr error
 	for _, group := range groups {
 		if len(group) == 0 {
 			continue
 		}
-
 		titleID := group[0].TitleID
-		a.activity.Infof("pkg", "Installing %d PKG(s) for %s", len(group), titleID)
-
-		for _, p := range group {
-			a.activity.Infof("pkg", "Installing %s v%s", p.Title, p.AppVer)
-
-			info, err := pkg.Extract(p.Path, hdd0Game)
-			if err != nil {
-				a.activity.Errorf("pkg", "Failed to install %s v%s: %v (skipping remaining versions for this title)", p.Title, p.AppVer, err)
+		a.activity.Infof("pkg", "Installing %d Library PKG(s) for %s", len(group), titleID)
+		for _, packageInfo := range group {
+			a.activity.Infof("pkg", "Installing %s v%s", packageInfo.Title, packageInfo.AppVer)
+			info, extractErr := pkg.Extract(packageInfo.Path, hdd0Game)
+			if extractErr != nil {
+				a.activity.Errorf("pkg", "Failed to install %s v%s: %v (skipping remaining versions for this title)", packageInfo.Title, packageInfo.AppVer, extractErr)
+				if installErr == nil {
+					installErr = fmt.Errorf("install %s v%s: %w", packageInfo.TitleID, packageInfo.AppVer, extractErr)
+				}
 				break
 			}
-
-			a.activity.Infof("pkg", "Successfully installed %s v%s to %s", p.Title, p.AppVer, filepath.Join(hdd0Game, info.TitleID))
+			installed++
+			a.activity.Infof("pkg", "Successfully installed %s v%s to %s", packageInfo.Title, packageInfo.AppVer, filepath.Join(hdd0Game, info.TitleID))
 		}
 	}
+	a.activity.Infof("pkg", "Library install complete: %d package(s) installed", installed)
+	return installed, installErr
+}
 
-	a.activity.Info("pkg", "Batch install complete")
-	return nil
+func (a *App) pendingLibraryPackagesPS3() ([]pkg.DiscoveredPKG, error) {
+	hdd0Game := strings.TrimSpace(a.cfg.RPCS3.HDD0Game)
+	if hdd0Game == "" {
+		return nil, fmt.Errorf("dev_hdd0/game path not set")
+	}
+	titleRoot, err := config.TitleDirForRoot(a.cfg.Storage.LibraryDir, "ps3")
+	if err != nil {
+		return nil, err
+	}
+	if _, err := os.Stat(titleRoot); err != nil {
+		if os.IsNotExist(err) {
+			return []pkg.DiscoveredPKG{}, nil
+		}
+		return nil, err
+	}
+	pkgs, err := pkg.DiscoverPKGs(titleRoot)
+	if err != nil && len(pkgs) == 0 {
+		return nil, fmt.Errorf("discover Library PKGs: %w", err)
+	}
+	if err != nil {
+		a.activity.Warnf("pkg", "Library PKG discovery warning: %v", err)
+	}
+	installedVersions := make(map[string]string)
+	seenVersions := make(map[string]struct{})
+	pending := make([]pkg.DiscoveredPKG, 0, len(pkgs))
+	for _, packageInfo := range pkgs {
+		installedVersion, found := installedVersions[packageInfo.TitleID]
+		if !found {
+			installedVersion, err = library.InstalledVersion(hdd0Game, packageInfo.TitleID)
+			if err != nil {
+				return nil, fmt.Errorf("read installed version for %s: %w", packageInfo.TitleID, err)
+			}
+			installedVersions[packageInfo.TitleID] = installedVersion
+		}
+		if library.PackageNeedsInstall(packageInfo.AppVer, installedVersion) {
+			key := packageInfo.TitleID + "\x00" + packageInfo.AppVer
+			if _, exists := seenVersions[key]; exists {
+				continue
+			}
+			seenVersions[key] = struct{}{}
+			pending = append(pending, packageInfo)
+		}
+	}
+	return pending, nil
 }
 
 func (a *App) emitDownloadLibrary() {

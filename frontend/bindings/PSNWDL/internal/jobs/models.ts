@@ -10,8 +10,7 @@ import { Create as $Create } from "@wailsio/runtime";
 import * as psn$0 from "../psn/models.js";
 
 /**
- * Job is a single download+verify unit. Installing is a separate explicit
- * action (Queue.Install / App.InstallJob); there is no auto-install chain.
+ * Job is a single download+verify unit; there is no auto-install chain.
  */
 export class Job {
     "id": string;
@@ -25,7 +24,6 @@ export class Job {
     "state": JobState;
     "downloaded": number;
     "error"?: string;
-    "installed_to"?: string;
     "throughput"?: number;
     "eta"?: number;
     "attempt"?: number;
@@ -82,7 +80,6 @@ export enum JobState {
     StatePaused = "paused",
     StateResuming = "resuming",
     StateVerifying = "verifying",
-    StateInstalling = "installing",
     StateDone = "done",
     StateFailed = "failed",
     StateCanceled = "canceled",

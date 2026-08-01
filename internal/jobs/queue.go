@@ -20,7 +20,6 @@ import (
 
 	"PSNWDL/internal/activity"
 	"PSNWDL/internal/config"
-	"PSNWDL/internal/pkg"
 	"PSNWDL/internal/psn"
 )
 
@@ -198,7 +197,7 @@ func (q *Queue) Enqueue(parent context.Context, req Request) (string, error) {
 
 func isActiveJobState(state JobState) bool {
 	switch state {
-	case StateQueued, StateDownloading, StatePaused, StateResuming, StateVerifying, StateInstalling:
+	case StateQueued, StateDownloading, StatePaused, StateResuming, StateVerifying:
 		return true
 	default:
 		return false
@@ -404,45 +403,10 @@ func (q *Queue) run(parent context.Context, j *Job) {
 		return
 	}
 
-	// Download + verify are done. Installing is a separate explicit user
-	// action (Queue.Install / App.InstallJob), never automatic.
+	// Download + verify are done. Library installation is a separate explicit
+	// application action, never part of the queue.
 	q.setState(j, StateDone, "")
 	q.activity.InfoWithJob("jobs", "Job complete", j.ID)
-}
-
-// Install re-runs the extraction step for a finished job. Useful when the
-// user clicks "Install" on a completed download whose original Request did
-// not opt in to auto-install. PS3-only.
-func (q *Queue) Install(id, hdd0Game string) error {
-	if hdd0Game == "" {
-		return fmt.Errorf("dev_hdd0/game path not set")
-	}
-	q.mu.Lock()
-	j, ok := q.jobs[id]
-	q.mu.Unlock()
-	if !ok {
-		return fmt.Errorf("no job %s", id)
-	}
-	if j.State != StateDone {
-		return fmt.Errorf("job %s is %s, must be done first", id, j.State)
-	}
-	if j.Mode != "ps3" {
-		return fmt.Errorf("install is PS3-only")
-	}
-	q.setState(j, StateInstalling, "")
-
-	go func() {
-		info, err := pkg.Extract(j.DestPath, hdd0Game)
-		if err != nil {
-			q.setState(j, StateFailed, err.Error())
-			return
-		}
-		q.mu.Lock()
-		j.InstalledTo = filepath.Join(hdd0Game, info.TitleID)
-		q.mu.Unlock()
-		q.setState(j, StateDone, "")
-	}()
-	return nil
 }
 
 func (q *Queue) verify(j *Job) error {

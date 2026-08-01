@@ -18,6 +18,7 @@ const reconcileConcurrency = 6
 type Status string
 
 const (
+	StatusChecking       Status = "checking"
 	StatusNoneDownloaded Status = "none_downloaded"
 	StatusSomeDownloaded Status = "some_downloaded"
 	StatusAllDownloaded  Status = "all_downloaded"
@@ -29,13 +30,14 @@ const (
 // the download library. Installation state is deliberately not part of this
 // view; the Emulator pane owns synchronization, while Library owns stored files.
 type Row struct {
-	TitleID         string `json:"title_id"`
-	Name            string `json:"name,omitempty"`
-	InstallDir      string `json:"install_dir"`
-	Status          Status `json:"status"`
-	DownloadedCount int    `json:"downloaded_count"`
-	UpdateCount     int    `json:"update_count"`
-	Error           string `json:"error,omitempty"`
+	TitleID         string       `json:"title_id"`
+	Name            string       `json:"name,omitempty"`
+	InstallDir      string       `json:"install_dir"`
+	Status          Status       `json:"status"`
+	DownloadedCount int          `json:"downloaded_count"`
+	UpdateCount     int          `json:"update_count"`
+	Updates         []psn.Update `json:"updates,omitempty"`
+	Error           string       `json:"error,omitempty"`
 }
 
 // SyncPlan is the exact difference between the server-advertised package set
@@ -74,6 +76,10 @@ func ReconcilePS3(ctx context.Context, entries []rpcs3.Entry, client PSNLookup, 
 	return rows
 }
 
+func ReconcileTitlePS3(ctx context.Context, entry rpcs3.Entry, client PSNLookup, libraryRoot string) Row {
+	return reconcileOne(ctx, entry, client, libraryRoot)
+}
+
 func reconcileOne(ctx context.Context, entry rpcs3.Entry, client PSNLookup, libraryRoot string) Row {
 	row := Row{TitleID: entry.TitleID, InstallDir: entry.InstallDir}
 	title, err := client.LookupPS3(ctx, entry.TitleID)
@@ -84,6 +90,7 @@ func reconcileOne(ctx context.Context, entry rpcs3.Entry, client PSNLookup, libr
 	}
 
 	row.Name = title.Name
+	row.Updates = title.Updates
 	plan, err := PlanTitleSync(libraryRoot, "ps3", entry.TitleID, title.Updates)
 	if err != nil {
 		row.Status = StatusUnreachable

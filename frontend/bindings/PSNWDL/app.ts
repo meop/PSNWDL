@@ -72,20 +72,11 @@ export function GetConfig(): $CancellablePromise<config$0.Config> {
 }
 
 /**
- * InstallFolderPS3 discovers PKGs in `root`, groups them by TitleID,
- * orders by version ascending, and installs each group in order, skipping
- * a title's remaining versions if any earlier one fails.
+ * InstallLibraryPS3 installs only downloaded Library packages newer than the
+ * version currently present in RPCS3.
  */
-export function InstallFolderPS3(root: string, hdd0Game: string): $CancellablePromise<void> {
-    return $Call.ByID(2063962834, root, hdd0Game);
-}
-
-/**
- * InstallJob extracts a finished download into the configured RPCS3
- * dev_hdd0/game path. PS3-only.
- */
-export function InstallJob(id: string): $CancellablePromise<void> {
-    return $Call.ByID(4176702171, id);
+export function InstallLibraryPS3(): $CancellablePromise<number> {
+    return $Call.ByID(2374068087);
 }
 
 export function ListDownloadLibrary(): $CancellablePromise<downloads$0.Title[]> {
@@ -136,6 +127,10 @@ export function PauseJob(id: string): $CancellablePromise<void> {
     return $Call.ByID(1505341468, id);
 }
 
+export function PendingLibraryInstallsPS3(): $CancellablePromise<number> {
+    return $Call.ByID(4236031259);
+}
+
 export function PickDirectory(title: string, defaultDirectory: string): $CancellablePromise<string> {
     return $Call.ByID(1347829059, title, defaultDirectory);
 }
@@ -145,12 +140,12 @@ export function PickGamesYML(defaultDirectory: string): $CancellablePromise<stri
 }
 
 /**
- * ReconcileLibraryPS3 compares every server package for each RPCS3 title with
- * the exact files present in the download library.
+ * ReconcileTitlePS3 resolves one already-parsed RPCS3 row so the frontend can
+ * publish the local games.yml list immediately and fill server state per row.
  */
-export function ReconcileLibraryPS3(): $CancellablePromise<library$0.Row[]> {
-    return $Call.ByID(2934308500).then(($result: any) => {
-        return $$createType12($result);
+export function ReconcileTitlePS3(entry: rpcs3$0.Entry): $CancellablePromise<library$0.Row> {
+    return $Call.ByID(566170611, entry).then(($result: any) => {
+        return $$createType11($result);
     });
 }
 
@@ -171,19 +166,19 @@ export function SaveConfig(next: config$0.Config | null): $CancellablePromise<vo
 
 export function SearchPS3(tid: string, includeDRMFree: boolean): $CancellablePromise<psn$0.Title | null> {
     return $Call.ByID(156335737, tid, includeDRMFree).then(($result: any) => {
-        return $$createType14($result);
+        return $$createType13($result);
     });
 }
 
 export function SearchPS4(tid: string): $CancellablePromise<psn$0.Title | null> {
     return $Call.ByID(173113356, tid).then(($result: any) => {
-        return $$createType14($result);
+        return $$createType13($result);
     });
 }
 
 export function SearchVita(tid: string): $CancellablePromise<psn$0.Title | null> {
     return $Call.ByID(1407672275, tid).then(($result: any) => {
-        return $$createType14($result);
+        return $$createType13($result);
     });
 }
 
@@ -193,7 +188,7 @@ export function SearchVita(tid: string): $CancellablePromise<psn$0.Title | null>
  */
 export function SyncAllPS3(): $CancellablePromise<string[]> {
     return $Call.ByID(2563320289).then(($result: any) => {
-        return $$createType15($result);
+        return $$createType14($result);
     });
 }
 
@@ -203,7 +198,7 @@ export function SyncAllPS3(): $CancellablePromise<string[]> {
  */
 export function SyncTitlePS3(tid: string): $CancellablePromise<string[]> {
     return $Call.ByID(2047523786, tid).then(($result: any) => {
-        return $$createType15($result);
+        return $$createType14($result);
     });
 }
 
@@ -224,7 +219,6 @@ const $$createType8 = $Create.Array($$createType7);
 const $$createType9 = rpcs3$0.Entry.createFrom;
 const $$createType10 = $Create.Array($$createType9);
 const $$createType11 = library$0.Row.createFrom;
-const $$createType12 = $Create.Array($$createType11);
-const $$createType13 = psn$0.Title.createFrom;
-const $$createType14 = $Create.Nullable($$createType13);
-const $$createType15 = $Create.Array($Create.Any);
+const $$createType12 = psn$0.Title.createFrom;
+const $$createType13 = $Create.Nullable($$createType12);
+const $$createType14 = $Create.Array($Create.Any);

@@ -5,6 +5,10 @@
 // @ts-ignore: Unused imports
 import { Create as $Create } from "@wailsio/runtime";
 
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
+import * as psn$0 from "../psn/models.js";
+
 /**
  * Row describes how completely one RPCS3 title's server update set exists in
  * the download library. Installation state is deliberately not part of this
@@ -17,6 +21,7 @@ export class Row {
     "status": Status;
     "downloaded_count": number;
     "update_count": number;
+    "updates"?: psn$0.Update[];
     "error"?: string;
 
     /** Creates a new Row instance. */
@@ -44,7 +49,11 @@ export class Row {
      * Creates a new Row instance from a string or object.
      */
     static createFrom($$source: any = {}): Row {
+        const $$createField6_0 = $$createType1;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("updates" in $$parsedSource) {
+            $$parsedSource["updates"] = $$createField6_0($$parsedSource["updates"]);
+        }
         return new Row($$parsedSource as Partial<Row>);
     }
 }
@@ -55,9 +64,14 @@ export enum Status {
      */
     $zero = "",
 
+    StatusChecking = "checking",
     StatusNoneDownloaded = "none_downloaded",
     StatusSomeDownloaded = "some_downloaded",
     StatusAllDownloaded = "all_downloaded",
     StatusNoUpdates = "no_updates",
     StatusUnreachable = "unreachable",
 };
+
+// Private type creation functions
+const $$createType0 = psn$0.Update.createFrom;
+const $$createType1 = $Create.Array($$createType0);

@@ -40,9 +40,9 @@ module root to regenerate the TS models/bindings, then rebuild.
 ## Load-bearing invariants (breaking these is a regression)
 
 1. **No download ever auto-installs.** Installing is always a separate explicit
-   user click (`App.InstallJob` / `App.InstallFolderPS3`). Do not re-add an
-   auto-install flag to `jobs.Request`/`Job` or a post-verify install block in
-   `queue.run`.
+   user click (`App.InstallLibraryPS3`) and only considers packages in PSNWDL's
+   own Library. Do not re-add arbitrary-folder installation, an auto-install
+   flag to `jobs.Request`/`Job`, or a post-verify install block in `queue.run`.
 
 2. **Theming uses semantic tokens, never hardcoded colors.** All styling goes
    through `bg-surface`, `text-fg`, `border-border`, `bg-accent`,
@@ -83,13 +83,12 @@ module root to regenerate the TS models/bindings, then rebuild.
    with the right scope so the Activity console narrates it. A scope offered
    as a filter chip with no producer is a dead UI element.
 
-9. **The four workbench panes refresh independently.** Download search refreshes
-   only its results; Emulator reconciliation runs only on initial load, explicit
-   refresh, relevant settings changes, installation changes, or after the jobs
-   started by an Emulator sync action reach terminal state. Every completed
-   job refreshes Library, but Download-pane jobs must not otherwise refresh
-   Emulator. Do not reintroduce periodic reconciliation or make unrelated cache
-   changes fan out into RPCS3 parsing and PSN requests.
+9. **The four workbench panes refresh independently.** Download search and
+   Emulator reconciliation are manual-only through their Search and Refresh
+   controls. Platform changes refresh only the local Library. Library changes
+   may recompute already-cached Download/Emulator row state, but must not parse
+   `games.yml` or make PSN requests. Every completed job refreshes Library. Do
+   not add file watching, periodic reconciliation, or cross-pane network refreshes.
 
 10. **The queue is application-wide and belongs to Activity.** Download and
     Emulator actions share one backend queue and one concurrency limit. Show
