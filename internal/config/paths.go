@@ -25,9 +25,9 @@ func DefaultLibraryDir() (string, error) {
 	return filepath.Join(home, "library"), nil
 }
 
-// ConfigPath returns the config file path, honoring $PSNETDL_CONFIG if set.
+// ConfigPath returns the config file path, honoring $PSNWDL_CONFIG if set.
 func ConfigPath() (string, error) {
-	if override := os.Getenv("PSNETDL_CONFIG"); override != "" {
+	if override := os.Getenv("PSNWDL_CONFIG"); override != "" {
 		return override, nil
 	}
 	home, err := Home()
@@ -35,14 +35,6 @@ func ConfigPath() (string, error) {
 		return "", err
 	}
 	return filepath.Join(home, "config.toml"), nil
-}
-
-func legacyDefaultLibraryDir() (string, error) {
-	home, err := Home()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(home, "download"), nil
 }
 
 func TitleDirForRoot(root, mode string) (string, error) {

@@ -691,7 +691,7 @@
     all_downloaded: 'All downloaded',
     some_downloaded: 'Some downloaded',
     none_downloaded: 'None downloaded',
-    none: 'None',
+    none: 'None found',
     unreachable: 'Server unreachable',
   }
 </script>
@@ -710,11 +710,7 @@
           refreshSource()
         }}
       >
-        <label
-          class="flex w-28 items-center gap-1 text-xs text-muted"
-          class:invisible={source !== 'title' || mode !== 'ps3'}
-          title="Include alternate DRM-free package URLs published in PS3 update metadata"
-        >
+        <label class="flex w-28 items-center gap-1 text-xs text-muted" class:invisible={source !== 'title' || mode !== 'ps3'}>
           <input type="checkbox" bind:checked={includeDRMFree} disabled={source !== 'title' || mode !== 'ps3'} />
           Include DRM-free
         </label>

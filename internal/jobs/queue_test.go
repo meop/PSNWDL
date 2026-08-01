@@ -390,6 +390,71 @@ func TestResumeReleasesPausedReader(t *testing.T) {
 	}
 }
 
+func TestCancelImmediatelyAfterEnqueue(t *testing.T) {
+	q := NewQueue(config.Network{ParallelDownloads: 1}, t.TempDir(), NoopEmitter{}, activity.NewSink(NoopEmitter{}))
+	id, err := q.Enqueue(context.Background(), Request{
+		TitleID: "BCUS98114",
+		Mode:    "ps3",
+		Update:  psn.Update{Version: "01.00", URL: "https://example.com/update.pkg"},
+	})
+	if err != nil {
+		t.Fatalf("Enqueue: %v", err)
+	}
+	if err := q.Cancel(id); err != nil {
+		t.Fatalf("immediate Cancel: %v", err)
+	}
+	if state := waitForTerminal(t, q, id, time.Second); state != StateCanceled {
+		t.Fatalf("final state = %s, want canceled", state)
+	}
+}
+
+func TestDownloadLimiterRejectsCanceledContext(t *testing.T) {
+	limiter := newDownloadLimiter(1)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if limiter.Acquire(ctx) {
+		t.Fatal("Acquire unexpectedly accepted a canceled context")
+	}
+	if limiter.active != 0 {
+		t.Fatalf("active downloads = %d, want 0", limiter.active)
+	}
+}
+
+func TestRetryFirmwarePreservesRegion(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer server.Close()
+
+	q := NewQueue(config.Network{}, t.TempDir(), NoopEmitter{}, activity.NewSink(NoopEmitter{}))
+	q.jobs["job-failed"] = &Job{
+		ID:      "job-failed",
+		TitleID: "firmware",
+		Mode:    "ps3",
+		Region:  "us",
+		Kind:    KindFirmware,
+		Update:  psn.Update{Version: "4.93", URL: server.URL + "/PS3UPDAT.PUP"},
+		State:   StateFailed,
+	}
+
+	if err := q.Retry("job-failed"); err != nil {
+		t.Fatalf("Retry: %v", err)
+	}
+
+	jobs := q.List()
+	if len(jobs) != 2 {
+		t.Fatalf("job count = %d, want 2", len(jobs))
+	}
+	for _, job := range jobs {
+		if job.ID != "job-failed" && job.Region != "us" {
+			t.Fatalf("retried firmware region = %q, want us", job.Region)
+		}
+		if job.ID != "job-failed" {
+			waitForTerminal(t, q, job.ID, time.Second)
+		}
+	}
+}
+
 func TestDestinationPathRejectsUnsafeInput(t *testing.T) {
 	q := NewQueue(config.Network{}, t.TempDir(), NoopEmitter{}, activity.NewSink(NoopEmitter{}))
 	tests := []Request{

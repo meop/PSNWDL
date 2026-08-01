@@ -185,13 +185,15 @@ func (q *Queue) Enqueue(parent context.Context, req Request) (string, error) {
 			return id, nil
 		}
 	}
+	ctx, cancel := context.WithCancel(parent)
 	q.jobs[j.ID] = j
+	q.cancels[j.ID] = cancel
 	q.mu.Unlock()
 
 	q.emitter.Emit(EventJobAdded, *j)
 	q.activity.InfoWithJob("jobs", fmt.Sprintf("Enqueued %s %s v%s", req.TitleID, req.TitleName, req.Update.Version), j.ID)
 
-	go q.run(parent, j)
+	go q.run(ctx, cancel, j)
 	return j.ID, nil
 }
 
@@ -295,6 +297,7 @@ func (q *Queue) Retry(id string) error {
 		TitleID:   j.TitleID,
 		TitleName: j.TitleName,
 		Mode:      j.Mode,
+		Region:    j.Region,
 		Kind:      j.Kind,
 		Update:    j.Update,
 	}
@@ -308,11 +311,7 @@ func (q *Queue) Retry(id string) error {
 	return err
 }
 
-func (q *Queue) run(parent context.Context, j *Job) {
-	ctx, cancel := context.WithCancel(parent)
-	q.mu.Lock()
-	q.cancels[j.ID] = cancel
-	q.mu.Unlock()
+func (q *Queue) run(ctx context.Context, cancel context.CancelFunc, j *Job) {
 	defer func() {
 		cancel()
 		q.mu.Lock()
@@ -505,6 +504,12 @@ func newDownloadLimiter(limit int) *downloadLimiter {
 
 func (l *downloadLimiter) Acquire(ctx context.Context) bool {
 	for {
+		select {
+		case <-ctx.Done():
+			return false
+		default:
+		}
+
 		l.mu.Lock()
 		if l.active < l.limit {
 			l.active++

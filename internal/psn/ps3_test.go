@@ -1,9 +1,24 @@
 package psn
 
 import (
+	"bytes"
+	"context"
+	"errors"
+	"io"
+	"net/http"
 	"strings"
 	"testing"
+	"time"
+
+	"PSNWDL/internal/activity"
+	"PSNWDL/internal/config"
 )
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
+	return f(req)
+}
 
 const validPS3VerXML = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <titlepatch status="OK" titleid="BCUS98114">
@@ -154,5 +169,89 @@ func TestParsePS3VerXML_NoTitle(t *testing.T) {
 	}
 	if len(got.Updates) != 1 {
 		t.Fatalf("Updates len = %d, want 1", len(got.Updates))
+	}
+}
+
+func TestNewClientAppliesNetworkSettings(t *testing.T) {
+	client := NewClient(config.Network{TimeoutSeconds: 7, VerifyTLS: true}, activity.NewSink(nil))
+	if client.http.Timeout != 7*time.Second {
+		t.Fatalf("timeout = %s, want 7s", client.http.Timeout)
+	}
+	transport, ok := client.http.Transport.(*http.Transport)
+	if !ok {
+		t.Fatalf("transport type = %T", client.http.Transport)
+	}
+	if transport.TLSClientConfig == nil || transport.TLSClientConfig.InsecureSkipVerify {
+		t.Fatal("VerifyTLS=true should enable certificate verification")
+	}
+}
+
+func TestLookupPS3TreatsEmptyResponsesAsNoUpdates(t *testing.T) {
+	for _, status := range []int{http.StatusOK, http.StatusNoContent, http.StatusNotFound} {
+		t.Run(http.StatusText(status), func(t *testing.T) {
+			client := &Client{
+				http: &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+					if req.Method != http.MethodGet || !strings.Contains(req.URL.Path, "BCUS98114-ver.xml") {
+						t.Fatalf("unexpected request: %s %s", req.Method, req.URL)
+					}
+					return &http.Response{
+						StatusCode: status,
+						Body:       io.NopCloser(bytes.NewReader(nil)),
+						Header:     make(http.Header),
+					}, nil
+				})},
+				activity: activity.NewSink(nil),
+			}
+
+			title, err := client.LookupPS3(context.Background(), "BCUS98114")
+			if err != nil {
+				t.Fatalf("LookupPS3: %v", err)
+			}
+			if title.ID != "BCUS98114" || len(title.Updates) != 0 {
+				t.Fatalf("title = %+v, want no updates", title)
+			}
+		})
+	}
+}
+
+func TestLookupPS3ReportsRequestFailures(t *testing.T) {
+	wantErr := errors.New("network down")
+	client := &Client{
+		http: &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+			return nil, wantErr
+		})},
+		activity: activity.NewSink(nil),
+	}
+	if _, err := client.LookupPS3(context.Background(), "BCUS98114"); !errors.Is(err, wantErr) {
+		t.Fatalf("LookupPS3 error = %v, want wrapped network error", err)
+	}
+}
+
+func TestLookupPS3RejectsHTTPAndMalformedXML(t *testing.T) {
+	tests := []struct {
+		name   string
+		status int
+		body   string
+		match  string
+	}{
+		{name: "server error", status: http.StatusInternalServerError, match: "status 500"},
+		{name: "malformed XML", status: http.StatusOK, body: "<not-xml", match: "parse ver.xml"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			client := &Client{
+				http: &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+					return &http.Response{
+						StatusCode: test.status,
+						Body:       io.NopCloser(strings.NewReader(test.body)),
+						Header:     make(http.Header),
+					}, nil
+				})},
+				activity: activity.NewSink(nil),
+			}
+			if _, err := client.LookupPS3(context.Background(), "BCUS98114"); err == nil || !strings.Contains(err.Error(), test.match) {
+				t.Fatalf("LookupPS3 error = %v, want %q", err, test.match)
+			}
+		})
 	}
 }
