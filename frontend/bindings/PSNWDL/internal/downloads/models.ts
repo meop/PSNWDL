@@ -39,6 +39,7 @@ export class File {
 export class Title {
     "mode": string;
     "title_id": string;
+    "locale"?: string;
     "path": string;
     "file_count": number;
     "total_size": number;
@@ -73,10 +74,10 @@ export class Title {
      * Creates a new Title instance from a string or object.
      */
     static createFrom($$source: any = {}): Title {
-        const $$createField6_0 = $$createType1;
+        const $$createField7_0 = $$createType1;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("files" in $$parsedSource) {
-            $$parsedSource["files"] = $$createField6_0($$parsedSource["files"]);
+            $$parsedSource["files"] = $$createField7_0($$parsedSource["files"]);
         }
         return new Title($$parsedSource as Partial<Title>);
     }

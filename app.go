@@ -354,6 +354,9 @@ func (a *App) enqueueFirmwareUpdatesForCachedTitle(t downloads.Title) (int, erro
 
 	queued := 0
 	for _, e := range list.Entries {
+		if !strings.EqualFold(e.Locale, t.Locale) {
+			continue
+		}
 		if library.CompareVersion(e.Version, t.LatestVersion) <= 0 {
 			continue
 		}
@@ -362,6 +365,7 @@ func (a *App) enqueueFirmwareUpdatesForCachedTitle(t downloads.Title) (int, erro
 			TitleID:   "firmware",
 			TitleName: name,
 			Mode:      t.Mode,
+			Locale:    e.Locale,
 			Kind:      jobs.KindFirmware,
 			Update: psn.Update{
 				Version: e.Version,

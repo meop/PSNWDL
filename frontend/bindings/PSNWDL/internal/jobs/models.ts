@@ -18,6 +18,7 @@ export class Job {
     "title_id": string;
     "title_name"?: string;
     "mode": string;
+    "locale"?: string;
     "kind"?: string;
     "update": psn$0.Update;
     "dest_path": string;
@@ -61,10 +62,10 @@ export class Job {
      * Creates a new Job instance from a string or object.
      */
     static createFrom($$source: any = {}): Job {
-        const $$createField5_0 = $$createType0;
+        const $$createField6_0 = $$createType0;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("update" in $$parsedSource) {
-            $$parsedSource["update"] = $$createField5_0($$parsedSource["update"]);
+            $$parsedSource["update"] = $$createField6_0($$parsedSource["update"]);
         }
         return new Job($$parsedSource as Partial<Job>);
     }
@@ -94,6 +95,7 @@ export class Request {
     "title_id": string;
     "title_name"?: string;
     "mode": string;
+    "locale"?: string;
     "kind"?: string;
     "update": psn$0.Update;
 
@@ -116,10 +118,10 @@ export class Request {
      * Creates a new Request instance from a string or object.
      */
     static createFrom($$source: any = {}): Request {
-        const $$createField4_0 = $$createType0;
+        const $$createField5_0 = $$createType0;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("update" in $$parsedSource) {
-            $$parsedSource["update"] = $$createField4_0($$parsedSource["update"]);
+            $$parsedSource["update"] = $$createField5_0($$parsedSource["update"]);
         }
         return new Request($$parsedSource as Partial<Request>);
     }

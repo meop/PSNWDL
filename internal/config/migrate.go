@@ -9,62 +9,114 @@ import (
 
 var libraryModes = []string{"ps3", "ps4", "ps5", "psvita"}
 
-// MigrateLibraryLayout upgrades the v1 <root>/<mode>/updates/<title> layout
-// to v2's <root>/<mode>/{firmware,title} layout. The old default root is also
-// renamed from ~/.psnwdl/download to ~/.psnwdl/library. Custom roots are kept.
+// MigrateLibraryLayout upgrades older library layouts to the current schema:
+//   - v1 moves <root>/<mode>/updates/<title> into {firmware,title} branches.
+//   - v2 moves flat firmware files into firmware/unknown because their locale
+//     cannot be recovered from the old path.
+//
+// The v1 default root is also renamed from ~/.psnwdl/download to
+// ~/.psnwdl/library. Custom roots are kept.
 func MigrateLibraryLayout(cfg *Config) (bool, error) {
 	if cfg == nil || cfg.SchemaVersion >= SchemaVersion {
 		return false, nil
 	}
 
-	oldRoot := strings.TrimSpace(cfg.Storage.LibraryDir)
-	if oldRoot == "" {
+	originalVersion := cfg.SchemaVersion
+	root := strings.TrimSpace(cfg.Storage.LibraryDir)
+	if originalVersion < 2 {
+		if root == "" {
+			var err error
+			root, err = legacyDefaultLibraryDir()
+			if err != nil {
+				return false, fmt.Errorf("resolve legacy library: %w", err)
+			}
+		}
+		oldRoot := root
+		legacyRoot, legacyErr := legacyDefaultLibraryDir()
+		defaultRoot, defaultErr := DefaultLibraryDir()
+		if legacyErr == nil && defaultErr == nil && samePath(oldRoot, legacyRoot) {
+			root = defaultRoot
+		}
+
+		for _, mode := range libraryModes {
+			legacyUpdates := filepath.Join(oldRoot, mode, "updates")
+			entries, err := os.ReadDir(legacyUpdates)
+			if err != nil {
+				if os.IsNotExist(err) {
+					continue
+				}
+				return false, fmt.Errorf("read legacy library %s: %w", legacyUpdates, err)
+			}
+
+			for _, entry := range entries {
+				if !entry.IsDir() {
+					continue
+				}
+				source := filepath.Join(legacyUpdates, entry.Name())
+				var destination string
+				if strings.EqualFold(entry.Name(), "firmware") {
+					destination = filepath.Join(root, mode, "firmware")
+				} else {
+					destination = filepath.Join(root, mode, "title", entry.Name())
+				}
+				if err := moveLegacyDirectory(source, destination); err != nil {
+					return false, fmt.Errorf("migrate %s: %w", source, err)
+				}
+			}
+			removeIfEmpty(legacyUpdates)
+			removeIfEmpty(filepath.Join(oldRoot, mode))
+		}
+		removeIfEmpty(oldRoot)
+	} else if root == "" {
 		var err error
-		oldRoot, err = legacyDefaultLibraryDir()
+		root, err = DefaultLibraryDir()
 		if err != nil {
-			return false, fmt.Errorf("resolve legacy library: %w", err)
+			return false, fmt.Errorf("resolve library: %w", err)
 		}
 	}
-	newRoot := oldRoot
-	legacyRoot, legacyErr := legacyDefaultLibraryDir()
-	defaultRoot, defaultErr := DefaultLibraryDir()
-	if legacyErr == nil && defaultErr == nil && samePath(oldRoot, legacyRoot) {
-		newRoot = defaultRoot
+
+	if originalVersion < 3 {
+		if err := migrateFirmwareLocales(root); err != nil {
+			return false, err
+		}
 	}
 
+	cfg.Storage.LibraryDir = root
+	cfg.SchemaVersion = SchemaVersion
+	return true, nil
+}
+
+func migrateFirmwareLocales(root string) error {
 	for _, mode := range libraryModes {
-		legacyUpdates := filepath.Join(oldRoot, mode, "updates")
-		entries, err := os.ReadDir(legacyUpdates)
+		firmwareRoot := filepath.Join(root, mode, "firmware")
+		entries, err := os.ReadDir(firmwareRoot)
 		if err != nil {
 			if os.IsNotExist(err) {
 				continue
 			}
-			return false, fmt.Errorf("read legacy library %s: %w", legacyUpdates, err)
+			return fmt.Errorf("read firmware library %s: %w", firmwareRoot, err)
 		}
 
 		for _, entry := range entries {
-			if !entry.IsDir() {
+			if entry.IsDir() {
 				continue
 			}
-			source := filepath.Join(legacyUpdates, entry.Name())
-			var destination string
-			if strings.EqualFold(entry.Name(), "firmware") {
-				destination = filepath.Join(newRoot, mode, "firmware")
-			} else {
-				destination = filepath.Join(newRoot, mode, "title", entry.Name())
+			source := filepath.Join(firmwareRoot, entry.Name())
+			destination := filepath.Join(firmwareRoot, "unknown", entry.Name())
+			if err := os.MkdirAll(filepath.Dir(destination), 0o755); err != nil {
+				return fmt.Errorf("create firmware locale folder: %w", err)
 			}
-			if err := moveLegacyDirectory(source, destination); err != nil {
-				return false, fmt.Errorf("migrate %s: %w", source, err)
+			if _, err := os.Stat(destination); err == nil {
+				return fmt.Errorf("destination already exists: %s", destination)
+			} else if !os.IsNotExist(err) {
+				return err
+			}
+			if err := os.Rename(source, destination); err != nil {
+				return fmt.Errorf("migrate firmware %s: %w", source, err)
 			}
 		}
-		removeIfEmpty(legacyUpdates)
-		removeIfEmpty(filepath.Join(oldRoot, mode))
 	}
-
-	cfg.Storage.LibraryDir = newRoot
-	cfg.SchemaVersion = SchemaVersion
-	removeIfEmpty(oldRoot)
-	return true, nil
+	return nil
 }
 
 func moveLegacyDirectory(source, destination string) error {

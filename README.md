@@ -188,24 +188,26 @@ normal desktop validation.
 
 ### Cache layout
 
-Downloaded files are separated by platform and content type. Firmware is kept
-directly under `firmware`; title updates are grouped by title ID under `title`:
+Downloaded files are separated by platform and content type. Firmware is grouped
+by locale under `firmware`; title updates are grouped by title ID under `title`:
 
 ```
 ~/.psnwdl/library/
 ├── ps3/
-│   ├── firmware/firmware_4.93.pup
+│   ├── firmware/us/firmware_4.93.pup
 │   └── title/BCUS98114/BCUS98114_01.05.pkg
 ├── ps4/
-│   ├── firmware/<firmware>.pup
+│   ├── firmware/<locale>/<firmware>.pup
 │   └── title/CUSA00000/<update>.pkg
-├── ps5/firmware/firmware_26.04-13.40.00.pup
+├── ps5/firmware/us/firmware_26.04-13.40.00.pup
 └── …
 ```
 
-On the first schema-v2 launch, the former `<mode>/updates/<TitleID>` layout is
-migrated in place. The former default root `~/.psnwdl/download` is moved to the
-new `~/.psnwdl/library` root; configured custom roots remain custom.
+On the first schema-v3 launch, the former `<mode>/updates/<TitleID>` layout is
+migrated in place, and flat firmware files are placed under `firmware/unknown`
+because their locale cannot be recovered from the old path. The former default
+root `~/.psnwdl/download` is moved to `~/.psnwdl/library`; configured custom
+roots remain custom.
 
 Downloads are stored as the raw signed packages Sony ships. PS3 extraction into
 RPCS3 is an explicit Emulator action.

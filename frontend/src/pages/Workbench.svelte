@@ -42,7 +42,6 @@
   type Title = downloads.Title
   type File = downloads.File
   const ACTIVE_JOB_STATES = new Set(['queued', 'downloading', 'paused', 'resuming', 'verifying'])
-  const DOWNLOAD_COLUMN_LABELS = ['Selection', 'Kind', 'Version', 'Scope', 'Size', 'Action']
   const EMULATOR_COLUMN_LABELS = ['Title', 'Installed to server', 'Status', 'Action']
 
   let { mode, defaultDownload = 'firmware', appConfig }: Props = $props()
@@ -60,13 +59,14 @@
   let lastMode = $state<Mode>('ps3')
   let emulatorConfigKey = $state('')
   let expandedLibraryTitles = $state<Record<string, boolean>>({})
-  let downloadColumnWidths = $state([44, 80, 80, 180, 80, 128])
+  let downloadColumnWidths = $state([44, 100, 90, 220, 90])
   let emulatorColumnWidths = $state([200, 140, 120, 220])
   let titleState = $derived(searchState[mode])
   let normalizedID = $derived(titleState.titleID.trim().toUpperCase())
   let canSearch = $derived(/^[A-Z]{4}\d{5}$/.test(normalizedID) && !titleState.loading && mode !== 'ps5')
   let canSourceSearch = $derived(source === 'firmware' ? $fetching !== mode : canSearch)
   let cachedFirmware = $derived($cache[mode] ?? null)
+  let downloadColumnLabels = $derived(['Selection', 'Kind', 'Version', source === 'firmware' ? 'Locale' : 'Scope', 'Size'])
   let firmwareLoading = $derived($fetching === mode && !cachedFirmware?.list)
   let downloadSelectionKey = $derived(
     `${mode}:${source}:${source === 'title' ? titleState.result?.id || normalizedID || 'empty' : 'firmware'}`
@@ -198,8 +198,8 @@
     }
     return rows.sort((a, b) => compareVersion(b.version, a.version))
   })
-  let downloadRows = $derived(allDownloadRows.filter((row) => !downloaded(row)))
-  let availableDownloadRows = $derived(downloadRows.filter((row) => !isQueued(row)))
+  let downloadRows = $derived(allDownloadRows)
+  let availableDownloadRows = $derived(downloadRows.filter((row) => !isQueued(row) && !downloaded(row)))
   let selectedAvailableCount = $derived(
     availableDownloadRows.filter((row) => selectedDownloads.includes(row.key)).length
   )
@@ -293,6 +293,7 @@
       title_id: row.titleId,
       title_name: row.titleName,
       mode,
+      locale: row.locale || '',
       kind:
         row.kind === 'Firmware'
           ? 'firmware'
@@ -305,7 +306,9 @@
   }
 
   async function enqueueSelected() {
-    const selected = downloadRows.filter((row) => selectedDownloads.includes(row.key) && !isQueued(row))
+    const selected = downloadRows.filter(
+      (row) => selectedDownloads.includes(row.key) && !isQueued(row) && !downloaded(row)
+    )
     if (selected.length === 0) return
     downloadError = null
     try {
@@ -313,16 +316,6 @@
         await enqueueRow(row)
       }
       selectedDownloadBuckets[downloadSelectionKey] = []
-    } catch (e) {
-      downloadError = e instanceof Error ? e.message : String(e)
-    }
-  }
-
-  async function enqueueSingle(row: DownloadRow) {
-    downloadError = null
-    try {
-      await enqueueRow(row)
-      setSelectedDownload(row.key, false)
     } catch (e) {
       downloadError = e instanceof Error ? e.message : String(e)
     }
@@ -490,7 +483,10 @@
 
   function downloaded(row: DownloadRow): boolean {
     const cachedTitle = libraryState.titles.find(
-      (title) => title.mode === mode && title.title_id === row.titleId
+      (title) =>
+        title.mode === mode &&
+        title.title_id === row.titleId &&
+        (row.kind !== 'Firmware' || title.locale === row.locale)
     )
     if (!cachedTitle) return false
     const version = row.kind === 'DRM-free' ? `${row.version}_drm_free` : row.version
@@ -590,19 +586,30 @@
     )
   }
 
-  function columnWidthTotal(widths: number[]): number {
-    return widths.reduce((total, width) => total + width, 0)
+  function columnMinimum(table: 'download' | 'emulator', index: number): number {
+    return table === 'download' && index === 0 ? 40 : 64
+  }
+
+  function resizeColumnPair(widths: number[], table: 'download' | 'emulator', index: number, delta: number, starts = widths) {
+    if (widths.length < 2) return
+    const partner = index === widths.length - 1 ? index - 1 : index + 1
+    const targetStart = starts[index]
+    const partnerStart = starts[partner]
+    const minDelta = columnMinimum(table, index) - targetStart
+    const maxDelta = partnerStart - columnMinimum(table, partner)
+    const applied = Math.min(maxDelta, Math.max(minDelta, delta))
+    widths[index] = targetStart + applied
+    widths[partner] = partnerStart - applied
   }
 
   function resizeColumn(event: PointerEvent, table: 'download' | 'emulator', index: number) {
     event.preventDefault()
     const widths = table === 'download' ? downloadColumnWidths : emulatorColumnWidths
     const startX = event.clientX
-    const startWidth = widths[index]
-    const minimum = index === 0 && table === 'download' ? 40 : 64
+    const starts = [...widths]
 
     const move = (nextEvent: PointerEvent) => {
-      widths[index] = Math.max(minimum, startWidth + nextEvent.clientX - startX)
+      resizeColumnPair(widths, table, index, nextEvent.clientX - startX, starts)
     }
     const stop = () => {
       window.removeEventListener('pointermove', move)
@@ -614,8 +621,7 @@
 
   function nudgeColumn(table: 'download' | 'emulator', index: number, delta: number) {
     const widths = table === 'download' ? downloadColumnWidths : emulatorColumnWidths
-    const minimum = index === 0 && table === 'download' ? 40 : 64
-    widths[index] = Math.max(minimum, widths[index] + delta)
+    resizeColumnPair(widths, table, index, delta, [...widths])
   }
 
   function resizeColumnWithKeyboard(event: KeyboardEvent, table: 'download' | 'emulator', index: number) {
@@ -687,26 +693,29 @@
           refreshSource()
         }}
       >
+        <select bind:value={source} aria-label="Download type" class="input header-control h-8 px-2">
+          <option value="firmware">Firmware</option>
+          {#if mode !== 'ps5'}<option value="title">Title</option>{/if}
+        </select>
         {#if source === 'title'}
           <input
             bind:value={titleState.titleID}
             placeholder="BCUS98114"
             aria-label="Title ID"
             maxlength="9"
-            class="input h-8 w-32 px-2 font-mono text-xs"
+            class="input header-control h-8 w-32 px-2"
           />
           {#if mode === 'ps3'}
-            <label class="flex items-center gap-1 text-xs text-muted">
+            <label
+              class="flex items-center gap-1 text-xs text-muted"
+              title="Include alternate DRM-free package URLs published in PS3 update metadata"
+            >
               <input type="checkbox" bind:checked={includeDRMFree} />
-              DRM-free
+              Include DRM-free
             </label>
           {/if}
         {/if}
-        <button type="submit" disabled={!canSourceSearch} class="btn btn-primary">Search</button>
-        <select bind:value={source} aria-label="Download type" class="input h-8 px-2 text-xs leading-4">
-          <option value="firmware">Firmware</option>
-          {#if mode !== 'ps5'}<option value="title">Title</option>{/if}
-        </select>
+        <button type="submit" disabled={!canSourceSearch} class="btn btn-secondary">Search</button>
       </form>
     </div>
 
@@ -736,14 +745,10 @@
         <div class="empty">Loading latest firmware</div>
       {:else if downloadRows.length === 0}
         <div class="empty">
-          {allDownloadRows.length > 0
-            ? 'All results are already in Library'
-            : source === 'title'
-              ? 'Title update results'
-              : 'Latest firmware by region'}
+          {source === 'title' ? 'Title update results' : 'Latest firmware by region'}
         </div>
       {:else}
-        <table class="data-table table-fixed" style={`min-width: ${columnWidthTotal(downloadColumnWidths)}px`}>
+        <table class="data-table table-fixed">
           <colgroup>
             {#each downloadColumnWidths as width, index (index)}
               <col style={`width: ${width}px`} />
@@ -751,28 +756,31 @@
           </colgroup>
           <thead>
             <tr>
-              {#each DOWNLOAD_COLUMN_LABELS as label, index (label)}
+              {#each downloadColumnLabels as label, index (label)}
                 <th>
                   {#if index > 0}{label}{/if}
-                  <button
-                    type="button"
-                    class="column-resizer"
-                    aria-label={`Resize ${label} column`}
-                    onpointerdown={(event) => resizeColumn(event, 'download', index)}
-                    onkeydown={(event) => resizeColumnWithKeyboard(event, 'download', index)}
-                  ></button>
+                  {#if index < downloadColumnLabels.length - 1}
+                    <button
+                      type="button"
+                      class="column-resizer"
+                      aria-label={`Resize ${label} column`}
+                      onpointerdown={(event) => resizeColumn(event, 'download', index)}
+                      onkeydown={(event) => resizeColumnWithKeyboard(event, 'download', index)}
+                    ></button>
+                  {/if}
                 </th>
               {/each}
             </tr>
           </thead>
           <tbody>
             {#each downloadRows as row (row.key)}
-              <tr>
+              <tr aria-disabled={downloaded(row) || isQueued(row)}>
                 <td>
                   <input
                     type="checkbox"
-                    checked={selectedDownload(row.key)}
-                    disabled={isQueued(row)}
+                    checked={downloaded(row) || isQueued(row) || selectedDownload(row.key)}
+                    disabled={isQueued(row) || downloaded(row)}
+                    title={downloaded(row) ? 'Already in Library' : isQueued(row) ? 'Download in progress' : undefined}
                     onchange={(e) => setSelectedDownload(row.key, e.currentTarget.checked)}
                   />
                 </td>
@@ -780,17 +788,12 @@
                 <td class="font-mono">v{row.version}</td>
                 <td class="truncate text-muted">
                   {#if row.kind === 'Firmware'}
-                    {row.locale} · {row.type}
+                    {row.locale}
                   {:else}
                     {row.titleId}{row.systemVersion ? ` · FW ${row.systemVersion}` : ''}
                   {/if}
                 </td>
                 <td class="text-muted">{formatSize(row.size)}</td>
-                <td>
-                  <button onclick={() => enqueueSingle(row)} disabled={isQueued(row)} class="btn btn-secondary w-24 justify-center">
-                    {isQueued(row) ? 'In progress' : 'Download'}
-                  </button>
-                </td>
               </tr>
             {/each}
           </tbody>
@@ -859,7 +862,7 @@
         {:else if emulatorState.rows.length === 0}
           <div class="empty">Emulator titles</div>
         {:else}
-          <table class="data-table table-fixed" style={`min-width: ${columnWidthTotal(emulatorColumnWidths)}px`}>
+          <table class="data-table table-fixed">
             <colgroup>
               {#each emulatorColumnWidths as width, index (index)}
                 <col style={`width: ${width}px`} />
@@ -870,13 +873,15 @@
                 {#each EMULATOR_COLUMN_LABELS as label, index (label)}
                   <th>
                     {label === 'Installed to server' ? 'Installed -> Server' : label}
-                    <button
-                      type="button"
-                      class="column-resizer"
-                      aria-label={`Resize ${label} column`}
-                      onpointerdown={(event) => resizeColumn(event, 'emulator', index)}
-                      onkeydown={(event) => resizeColumnWithKeyboard(event, 'emulator', index)}
-                    ></button>
+                    {#if index < EMULATOR_COLUMN_LABELS.length - 1}
+                      <button
+                        type="button"
+                        class="column-resizer"
+                        aria-label={`Resize ${label} column`}
+                        onpointerdown={(event) => resizeColumn(event, 'emulator', index)}
+                        onkeydown={(event) => resizeColumnWithKeyboard(event, 'emulator', index)}
+                      ></button>
+                    {/if}
                   </th>
                 {/each}
               </tr>
@@ -897,7 +902,7 @@
                     </span>
                   </td>
                   <td>
-                    <div class="flex gap-1">
+                    <div class="flex flex-wrap gap-1">
                       {#if row.status === 'update_available' || row.status === 'missing_all'}
                         <button onclick={() => syncTitle(row.title_id)} disabled={titleDownloadInProgress(row.title_id)} class="btn btn-secondary">
                           {titleDownloadInProgress(row.title_id) ? 'In progress' : 'Download'}
@@ -976,27 +981,62 @@
                     onchange={(event) => toggleFiles(firmwareFiles, event.currentTarget.checked)}
                   />
                   <span class="font-mono font-semibold text-fg">firmware</span>
-                  <span class="text-muted">{firmwareFiles.length} files · {formatSize(totalFileSize(firmwareFiles))}</span>
-                  <button onclick={() => OpenFolder(firmwareLibraryTitles[0].path)} class="btn btn-secondary">Open</button>
+                  <span class="text-muted">{firmwareLibraryTitles.length} locales · {formatSize(totalFileSize(firmwareFiles))}</span>
+                  <span></span>
                 </div>
 
                 {#if titleExpanded(firmwareKey)}
-                  <div class="divide-y divide-border bg-inset" role="group">
-                    {#each firmwareFiles as file (file.path)}
-                      <div class="tree-file-row pl-8 pr-3" role="treeitem" aria-selected={selected(file.path)}>
-                        <span class="text-center text-muted-faint" aria-hidden="true">└</span>
-                        <input
-                          type="checkbox"
-                          checked={selected(file.path)}
-                          aria-label={`Select ${file.name}`}
-                          onchange={(event) => setSelected(file.path, event.currentTarget.checked)}
-                        />
-                        <div class="min-w-0">
-                          <div class="truncate text-fg" title={file.name}>{file.name}</div>
-                          <div class="truncate font-mono text-muted-soft" title={file.path}>{file.path}</div>
+                  <div class="divide-y divide-border" role="group">
+                    {#each firmwareLibraryTitles as firmwareLocale (`${firmwareLocale.mode}-firmware-${firmwareLocale.locale}`)}
+                      <section
+                        role="treeitem"
+                        aria-expanded={titleExpanded(firmwareLocale.path)}
+                        aria-selected={titleSelectionState(firmwareLocale) !== 'none'}
+                      >
+                        <div class="tree-row bg-surface pl-7 pr-3">
+                          <button
+                            onclick={() => toggleTitleExpanded(firmwareLocale.path)}
+                            class="btn btn-quiet h-6 min-h-6 w-6 p-0"
+                            aria-label={`${titleExpanded(firmwareLocale.path) ? 'Collapse' : 'Expand'} ${firmwareLocale.locale}`}
+                          >
+                            <span aria-hidden="true">{titleExpanded(firmwareLocale.path) ? '▾' : '▸'}</span>
+                          </button>
+                          <input
+                            type="checkbox"
+                            checked={titleSelectionState(firmwareLocale) === 'all'}
+                            indeterminate={titleSelectionState(firmwareLocale) === 'some'}
+                            aria-label={`Select ${firmwareLocale.locale} firmware`}
+                            onchange={(event) => toggleTitle(firmwareLocale, event.currentTarget.checked)}
+                          />
+                          <div class="min-w-0">
+                            <div class="font-semibold text-fg-strong">{firmwareLocale.locale || 'unknown'}</div>
+                            <div class="truncate font-mono text-muted-soft" title={firmwareLocale.path}>{firmwareLocale.path}</div>
+                          </div>
+                          <span class="text-muted">{firmwareLocale.file_count} files · {formatSize(firmwareLocale.total_size)}</span>
+                          <button onclick={() => OpenFolder(firmwareLocale.path)} class="btn btn-secondary">Open</button>
                         </div>
-                        <div class="text-right text-muted">{labelForFile(file)}</div>
-                      </div>
+
+                        {#if titleExpanded(firmwareLocale.path)}
+                          <div class="divide-y divide-border bg-inset" role="group">
+                            {#each firmwareLocale.files ?? [] as file (file.path)}
+                              <div class="tree-file-row pl-12 pr-3" role="treeitem" aria-selected={selected(file.path)}>
+                                <span class="text-center text-muted-faint" aria-hidden="true">└</span>
+                                <input
+                                  type="checkbox"
+                                  checked={selected(file.path)}
+                                  aria-label={`Select ${file.name}`}
+                                  onchange={(event) => setSelected(file.path, event.currentTarget.checked)}
+                                />
+                                <div class="min-w-0">
+                                  <div class="truncate text-fg" title={file.name}>{file.name}</div>
+                                  <div class="truncate font-mono text-muted-soft" title={file.path}>{file.path}</div>
+                                </div>
+                                <div class="text-right text-muted">{labelForFile(file)}</div>
+                              </div>
+                            {/each}
+                          </div>
+                        {/if}
+                      </section>
                     {/each}
                   </div>
                 {/if}
@@ -1138,7 +1178,14 @@
 
   .data-table {
     width: 100%;
+    max-width: 100%;
     font-size: 0.75rem;
+  }
+
+  .header-control {
+    font-family: inherit;
+    font-size: 0.75rem !important;
+    line-height: 1rem;
   }
 
   th {

@@ -8,7 +8,7 @@ import (
 
 func TestScanUsesFirmwareAndTitleBranches(t *testing.T) {
 	root := t.TempDir()
-	firmwareDir := filepath.Join(root, "ps3", "firmware")
+	firmwareDir := filepath.Join(root, "ps3", "firmware", "us")
 	titleDir := filepath.Join(root, "ps3", "title", "BCUS98114")
 	if err := os.MkdirAll(firmwareDir, 0o755); err != nil {
 		t.Fatal(err)
@@ -36,6 +36,9 @@ func TestScanUsesFirmwareAndTitleBranches(t *testing.T) {
 	}
 	if byID["firmware"].Path != firmwareDir {
 		t.Errorf("firmware title = %+v", byID["firmware"])
+	}
+	if byID["firmware"].Locale != "us" {
+		t.Errorf("firmware locale = %q, want us", byID["firmware"].Locale)
 	}
 	if byID["BCUS98114"].Path != titleDir {
 		t.Errorf("download title = %+v", byID["BCUS98114"])

@@ -11,7 +11,7 @@ import (
 	"github.com/pelletier/go-toml/v2"
 )
 
-const SchemaVersion = 2
+const SchemaVersion = 3
 
 type Config struct {
 	SchemaVersion int     `toml:"schema_version" json:"schema_version"`

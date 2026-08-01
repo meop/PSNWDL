@@ -98,15 +98,16 @@ module root to regenerate the TS models/bindings, then rebuild.
     top pane.
 
 11. **Library storage has explicit content branches.** The default root is
-    `~/.psnwdl/library`; files live under `<mode>/firmware/` or
+    `~/.psnwdl/library`; files live under `<mode>/firmware/<locale>/` or
     `<mode>/title/<TitleID>/`. Schema-v1 libraries are migrated by
     `config.MigrateLibraryLayout`. Keep download destinations, scanning,
     reconciliation, Emulator cache actions, and documentation on this layout.
 
-12. **Download results exclude files already in Library.** Filtering is local
-    and reactive against the downloaded-library store: completion hides the
-    matching row and deletion reveals it again when that firmware/title result
-    is currently loaded. Do not turn Library changes into fresh PSN searches.
+12. **Download results keep Library matches visible but disabled.** Matching is
+    local and reactive against the downloaded-library store: completion makes
+    the matching row non-interactive and deletion enables it again when that
+    firmware/title result is currently loaded. Do not turn Library changes into
+    fresh PSN searches.
 
 ---
 

@@ -169,6 +169,7 @@ func (q *Queue) Enqueue(parent context.Context, req Request) (string, error) {
 		TitleID:   req.TitleID,
 		TitleName: req.TitleName,
 		Mode:      req.Mode,
+		Locale:    req.Locale,
 		Kind:      kind,
 		Update:    req.Update,
 		DestPath:  dest,
@@ -727,7 +728,18 @@ func (q *Queue) destinationPath(req Request) (string, error) {
 	var dir string
 	if kind == KindFirmware {
 		ext = ".pup"
-		dir, err = config.FirmwareDirForRoot(libraryDir, req.Mode)
+		locale := strings.ToLower(strings.TrimSpace(req.Locale))
+		if locale == "" {
+			return "", errors.New("firmware request missing locale")
+		}
+		if strings.ContainsAny(locale, `\\/:*?"<>|`) || locale == "." || locale == ".." {
+			return "", fmt.Errorf("firmware request has invalid locale %q", req.Locale)
+		}
+		firmwareRoot, firmwareErr := config.FirmwareDirForRoot(libraryDir, req.Mode)
+		if firmwareErr != nil {
+			return "", firmwareErr
+		}
+		dir = filepath.Join(firmwareRoot, locale)
 	} else {
 		titleRoot, titleErr := config.TitleDirForRoot(libraryDir, req.Mode)
 		if titleErr != nil {

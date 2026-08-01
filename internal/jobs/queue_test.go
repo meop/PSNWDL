@@ -251,6 +251,7 @@ func TestEnqueue_DownloadCanOutliveRequestTimeout(t *testing.T) {
 	id, err := q.Enqueue(context.Background(), Request{
 		TitleID: "firmware",
 		Mode:    "ps3",
+		Locale:  "us",
 		Kind:    KindFirmware,
 		Update: psn.Update{
 			Version: "4.93",
@@ -285,6 +286,7 @@ func TestEnqueue_ReturnsExistingActiveJobForSameDestination(t *testing.T) {
 	req := Request{
 		TitleID: "firmware",
 		Mode:    "ps3",
+		Locale:  "us",
 		Kind:    KindFirmware,
 		Update:  psn.Update{Version: "4.93", URL: "https://example.com/PS3UPDAT.PUP"},
 	}
@@ -357,13 +359,14 @@ func TestDestinationPath_Firmware(t *testing.T) {
 	got, err := q.destinationPath(Request{
 		TitleID: "firmware",
 		Mode:    "ps3",
+		Locale:  "us",
 		Kind:    KindFirmware,
 		Update:  psn.Update{Version: "4.93", URL: "https://example.com/PS3UPDAT.PUP"},
 	})
 	if err != nil {
 		t.Fatalf("destinationPath: %v", err)
 	}
-	want := filepath.Join(home, ".psnwdl", "library", "ps3", "firmware", "firmware_4.93.pup")
+	want := filepath.Join(home, ".psnwdl", "library", "ps3", "firmware", "us", "firmware_4.93.pup")
 	if got != want {
 		t.Errorf("got %q, want %q", got, want)
 	}
@@ -394,6 +397,7 @@ func TestDestinationPathRejectsUnsafeInput(t *testing.T) {
 		{TitleID: "BCUS98114", Mode: `..\\outside`, Update: psn.Update{Version: "01.00", URL: "https://example.com/a.pkg"}},
 		{TitleID: "BCUS98114", Mode: "ps3", Kind: "unknown", Update: psn.Update{Version: "01.00", URL: "https://example.com/a.pkg"}},
 		{TitleID: "firmware", Mode: "ps5", Kind: KindFirmware, Update: psn.Update{Version: "01.00", URL: "file:///tmp/a.pup"}},
+		{TitleID: "firmware", Mode: "ps5", Locale: `..\\outside`, Kind: KindFirmware, Update: psn.Update{Version: "01.00", URL: "https://example.com/a.pup"}},
 	}
 	for _, req := range tests {
 		if _, err := q.destinationPath(req); err == nil {
