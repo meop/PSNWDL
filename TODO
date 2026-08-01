@@ -1,5 +1,0 @@
-# TODO
-
-- When the library setting changes, prompt whether to move the existing content.
-- File and directory dialogs should open at the configured path when it exists,
-  rather than remembering an unrelated previous location.

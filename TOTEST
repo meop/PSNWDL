@@ -1,5 +1,0 @@
-# Manual test checklist
-
-- Download and library workflows.
-- Emulator sync behavior.
-- Verify the Wails 3 development host at `127.0.0.1:9245`.
