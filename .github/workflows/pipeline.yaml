@@ -178,7 +178,13 @@ jobs:
       - name: Install NSIS
         if: matrix.os == 'windows'
         shell: pwsh
-        run: choco install nsis --yes --no-progress
+        run: |
+          choco install nsis --yes --no-progress
+          $nsisPath = Join-Path ${env:ProgramFiles(x86)} 'NSIS'
+          if (-not (Test-Path -LiteralPath (Join-Path $nsisPath 'makensis.exe'))) {
+            throw "makensis.exe was not installed in $nsisPath"
+          }
+          $nsisPath | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
       - name: Install Wails CLI
         run: go install github.com/wailsapp/wails/v3/cmd/wails3@${{ env.WAILS_VERSION }}
       - name: Install frontend dependencies
@@ -205,7 +211,7 @@ jobs:
           mkdir -p staging
           version=$(tr -d '[:space:]' < VERSION)
           shopt -s nullglob
-          appimages=(bin/PSNWDL-*.AppImage)
+          appimages=(bin/*.AppImage)
           if (( ${#appimages[@]} != 1 )); then
             echo "Expected one AppImage, found ${#appimages[@]}" >&2
             exit 1
