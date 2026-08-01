@@ -153,7 +153,7 @@
               <div class="text-muted">Version</div>
               <div class="font-mono text-fg">{appVersion}</div>
               <div class="text-muted">Credit</div>
-              <div class="text-fg">Developed with help from GPT, Claude, and GLM</div>
+              <div class="text-fg">Developed with help from GPT and GLM</div>
             </div>
           </div>
         {/if}
