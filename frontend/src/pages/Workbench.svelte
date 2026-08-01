@@ -392,7 +392,7 @@
   }
 
   async function syncAllNeeded() {
-    if (syncingAll || emulatorSyncActive || emulatorRefreshing || isMissingGamesConfig() || emulatorState.loadError) return
+    if (!canSyncAll()) return
     syncingAll = true
     emulatorError = null
     try {
@@ -583,6 +583,15 @@
     return row.status !== library.Status.StatusChecking &&
       row.status !== library.Status.StatusUnreachable &&
       row.downloaded_count < row.update_count
+  }
+
+  function canSyncAll(): boolean {
+    return !syncingAll &&
+      !emulatorSyncActive &&
+      !emulatorRefreshing &&
+      !isMissingGamesConfig() &&
+      !emulatorState.loadError &&
+      emulatorState.rows.some(canSyncRow)
   }
 
   function syncActionLabel(row: library.Row): string {
@@ -807,7 +816,7 @@
         <div class="flex flex-wrap items-center justify-end gap-2">
           <button
             onclick={syncAllNeeded}
-            disabled={syncingAll || emulatorSyncActive || emulatorRefreshing || isMissingGamesConfig() || Boolean(emulatorState.loadError)}
+            disabled={!canSyncAll()}
             class="btn btn-primary"
           >
             Sync all
