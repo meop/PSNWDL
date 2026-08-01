@@ -58,7 +58,7 @@
   let emulatorError = $state<string | null>(null)
   let syncingAll = $state(false)
   let emulatorSyncJobIDs = $state<string[]>([])
-  let installingPKGs = $state(false)
+  let installingAll = $state(false)
   let pendingPKGCount = $state(0)
   let pendingPKGError = $state<string | null>(null)
   let pendingPKGGeneration = 0
@@ -404,9 +404,9 @@
     }
   }
 
-  async function installLibraryPKGs() {
+  async function installAll() {
     if (pendingPKGCount === 0 || isMissingInstallConfig()) return
-    installingPKGs = true
+    installingAll = true
     emulatorError = null
     try {
       await InstallLibraryPKGsPS3()
@@ -414,7 +414,7 @@
       emulatorError = e instanceof Error ? e.message : String(e)
     } finally {
       await refreshPendingPKGs()
-      installingPKGs = false
+      installingAll = false
     }
   }
 
@@ -503,22 +503,6 @@
     return !emulatorState.hdd0Input
   }
 
-  function syncAllTooltip(): string {
-    if (isMissingGamesConfig()) return 'Set games.yml in Settings before syncing'
-    if (emulatorState.loadError) return 'Refresh the Emulator list before syncing'
-    if (emulatorRefreshing) return 'The Emulator list is refreshing'
-    if (syncingAll) return 'Sync all is in progress'
-    return 'Make the PS3 title library exactly match the loaded RPCS3 titles and PSN updates'
-  }
-
-  function installPKGsTooltip(): string {
-    if (isMissingInstallConfig()) return 'Set dev_hdd0/game in Settings before installing PKGs'
-    if (installingPKGs) return 'PKG installation is in progress'
-    if (pendingPKGError) return pendingPKGError
-    if (pendingPKGCount === 0) return 'No Library PKGs need installation'
-    return `Install ${pendingPKGCount} Library PKG(s) newer than RPCS3's installed versions`
-  }
-
   function selected(path: string): boolean {
     return libraryState.selected.includes(path)
   }
@@ -599,6 +583,7 @@
 
   function syncActionLabel(row: library.Row): string {
     if (titleDownloadInProgress(row.title_id)) return 'Syncing'
+    if (row.status === library.Status.StatusUnreachable) return 'Blocked'
     if (row.status === library.Status.StatusAllDownloaded || row.status === library.Status.StatusNoUpdates) return 'Synced'
     return 'Sync'
   }
@@ -824,17 +809,15 @@
             onclick={syncAllNeeded}
             disabled={syncingAll || emulatorRefreshing || isMissingGamesConfig() || Boolean(emulatorState.loadError)}
             class="btn btn-primary"
-            title={syncAllTooltip()}
           >
             {syncingAll ? 'Syncing all' : 'Sync all'}
           </button>
           <button
-            onclick={installLibraryPKGs}
-            disabled={installingPKGs || pendingPKGCount === 0 || isMissingInstallConfig()}
+            onclick={installAll}
+            disabled={installingAll || pendingPKGCount === 0 || isMissingInstallConfig()}
             class="btn btn-secondary"
-            title={installPKGsTooltip()}
           >
-            {installingPKGs ? 'Installing PKGs' : 'Install PKGs'}
+            {installingAll ? 'Installing all' : 'Install all'}
           </button>
           <button onclick={() => refreshEmulator()} disabled={emulatorRefreshing || isMissingGamesConfig()} class="btn btn-secondary">
             {emulatorRefreshing ? 'Refreshing' : 'Refresh'}

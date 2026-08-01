@@ -83,10 +83,10 @@
 
     <div class="grow"></div>
 
-    <button onclick={() => (overlay = 'settings')} disabled={!booted} title="Settings" aria-label="Settings" class="btn btn-secondary min-h-8 min-w-8 px-2">
+    <button onclick={() => (overlay = 'settings')} disabled={!booted} aria-label="Settings" class="btn btn-secondary min-h-8 min-w-8 px-2">
       Settings
     </button>
-    <button onclick={() => (overlay = 'about')} disabled={!booted} title="About" aria-label="About" class="btn btn-secondary min-h-8 min-w-8 px-2">
+    <button onclick={() => (overlay = 'about')} disabled={!booted} aria-label="About" class="btn btn-secondary min-h-8 min-w-8 px-2">
       About
     </button>
   </header>
