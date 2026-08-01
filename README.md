@@ -144,7 +144,7 @@ three-part core version. For example, `1.2.3-rc1` becomes `1.2.3` only in those
 native numeric fields.
 
 The GitHub Actions pipeline validates every branch and pull request. A push to
-`master` whose `VERSION` has no existing GitHub release builds these artifacts:
+`master` whose `VERSION` has no existing `v<VERSION>` tag builds these artifacts:
 
 - Windows x64 and ARM64: per-user NSIS installer and portable ZIP
 - Linux x64 and ARM64: AppImage
