@@ -191,13 +191,6 @@ export function SearchVita(tid: string): $CancellablePromise<psn$0.Title | null>
 }
 
 /**
- * SetActiveMode notifies backend actions that depend on the current mode.
- */
-export function SetActiveMode(mode: string): $CancellablePromise<void> {
-    return $Call.ByID(2746297218, mode);
-}
-
-/**
  * SyncTitlePS3 enqueues only the missing updates for a single title.
  */
 export function SyncTitlePS3(tid: string): $CancellablePromise<void> {

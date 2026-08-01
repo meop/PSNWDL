@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -10,8 +9,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
-	"sync"
-	"time"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 
@@ -26,19 +23,13 @@ import (
 )
 
 type App struct {
-	ctx         context.Context
-	wailsApp    *application.App
-	cfg         *config.Config
-	cfgPath     string
-	psn         *psn.Client
-	jobs        *jobs.Queue
-	activeMode  string
-	activity    *activity.Sink
-	watchMu     sync.Mutex
-	lastDLSig   string
-	lastDLJSON  string
-	lastEmuSig  string
-	lastEmuJSON string
+	ctx      context.Context
+	wailsApp *application.App
+	cfg      *config.Config
+	cfgPath  string
+	psn      *psn.Client
+	jobs     *jobs.Queue
+	activity *activity.Sink
 }
 
 func NewApp(wailsApp *application.App) *App {
@@ -63,19 +54,18 @@ func (a *App) ServiceStartup(ctx context.Context, _ application.ServiceOptions) 
 		}
 	}
 
-	emitter := &wailsEmitter{app: a.wailsApp}
+	emitter := &wailsEmitter{
+		app: a.wailsApp,
+		onJobDone: func() {
+			go a.emitDownloadLibrary()
+		},
+	}
 	a.activity = activity.NewSink(emitter)
 	if err := ensureConfigLibraryDir(a.cfg); err != nil {
 		log.Printf("library dir: %v", err)
 	}
 	a.psn = psn.NewClient(a.cfg.Network, a.activity)
 	a.jobs = jobs.NewQueue(a.cfg.Network, a.cfg.Storage.LibraryDir, emitter, a.activity)
-	a.activeMode = a.cfg.UI.DefaultMode
-	if a.activeMode == "" {
-		a.activeMode = "ps3"
-	}
-
-	a.startStateWatcher()
 	return nil
 }
 
@@ -227,17 +217,8 @@ func (a *App) SaveConfig(next *config.Config) error {
 	a.psn = psn.NewClient(a.cfg.Network, a.activity)
 	a.jobs.SetLibraryDir(a.cfg.Storage.LibraryDir)
 	a.jobs.SetNetwork(a.cfg.Network)
-	go a.evaluateDownloadLibrary(true)
-	go a.evaluateEmulatorLibrary(true)
+	go a.emitDownloadLibrary()
 	return nil
-}
-
-// SetActiveMode notifies backend actions that depend on the current mode.
-func (a *App) SetActiveMode(mode string) {
-	a.activeMode = mode
-	if mode == "ps3" {
-		go a.evaluateEmulatorLibrary(true)
-	}
 }
 
 func (a *App) ActivityLog() []activity.Entry {
@@ -297,8 +278,6 @@ func (a *App) DeleteLibraryItems(paths []string) error {
 		return err
 	}
 	a.activity.Infof("library", "Deleted %d selected library item(s)", len(paths))
-	go a.evaluateDownloadLibrary(true)
-	go a.evaluateEmulatorLibrary(true)
 	return nil
 }
 
@@ -318,11 +297,7 @@ func (a *App) UpdateDownloadLibrary() ([]downloads.Title, error) {
 		queued += n
 	}
 	a.activity.Infof("library", "Library update check queued %d item(s)", queued)
-	next, err := downloads.Scan(a.cfg.Storage.LibraryDir)
-	if err == nil {
-		go a.evaluateDownloadLibrary(true)
-	}
-	return next, err
+	return downloads.Scan(a.cfg.Storage.LibraryDir)
 }
 
 func (a *App) enqueueUpdatesForCachedTitle(t downloads.Title) (int, error) {
@@ -502,8 +477,7 @@ func (a *App) ClearTitleCache(tid string) error {
 	}
 	library.InvalidateInstalledVersionCache(tid)
 	a.activity.Infof("library", "Cleared cache for %s", tid)
-	go a.evaluateDownloadLibrary(true)
-	go a.evaluateEmulatorLibrary(true)
+	go a.emitDownloadLibrary()
 	return nil
 }
 
@@ -591,36 +565,8 @@ func (a *App) InstallFolderPS3(root, hdd0Game string) error {
 	return nil
 }
 
-func (a *App) startStateWatcher() {
-	go func() {
-		a.evaluateDownloadLibrary(true)
-		a.evaluateEmulatorLibrary(true)
-
-		ticker := time.NewTicker(2 * time.Second)
-		defer ticker.Stop()
-
-		for {
-			select {
-			case <-a.ctx.Done():
-				return
-			case <-ticker.C:
-				a.evaluateDownloadLibrary(false)
-				a.evaluateEmulatorLibrary(false)
-			}
-		}
-	}()
-}
-
-func (a *App) evaluateDownloadLibrary(force bool) {
+func (a *App) emitDownloadLibrary() {
 	if a.ctx == nil || a.cfg == nil {
-		return
-	}
-
-	sig := treeSignature(a.cfg.Storage.LibraryDir)
-	a.watchMu.Lock()
-	sameSig := sig == a.lastDLSig
-	a.watchMu.Unlock()
-	if sameSig && !force {
 		return
 	}
 
@@ -629,126 +575,22 @@ func (a *App) evaluateDownloadLibrary(force bool) {
 		a.wailsApp.Event.Emit("downloads:error", err.Error())
 		return
 	}
-	payload, _ := json.Marshal(titles)
-
-	a.watchMu.Lock()
-	changed := force || string(payload) != a.lastDLJSON
-	a.lastDLSig = sig
-	if changed {
-		a.lastDLJSON = string(payload)
-	}
-	a.watchMu.Unlock()
-
-	if changed {
-		a.wailsApp.Event.Emit("downloads:updated", titles)
-	}
-}
-
-func (a *App) evaluateEmulatorLibrary(force bool) {
-	if a.ctx == nil || a.cfg == nil || a.activeMode != "ps3" {
-		return
-	}
-	if a.cfg.RPCS3.GamesYML == "" || a.cfg.RPCS3.HDD0Game == "" {
-		return
-	}
-
-	sig := fileSignature(a.cfg.RPCS3.GamesYML) + "|" + treeSignature(a.cfg.RPCS3.HDD0Game) + "|" + downloadInventorySignature(a.cfg.Storage.LibraryDir)
-	a.watchMu.Lock()
-	sameSig := sig == a.lastEmuSig
-	a.watchMu.Unlock()
-	if sameSig && !force {
-		return
-	}
-
-	rows, err := a.ReconcileLibraryPS3()
-	if err != nil {
-		a.wailsApp.Event.Emit("library:error", err.Error())
-		return
-	}
-	payload, _ := json.Marshal(rows)
-
-	a.watchMu.Lock()
-	changed := force || string(payload) != a.lastEmuJSON
-	a.lastEmuSig = sig
-	if changed {
-		a.lastEmuJSON = string(payload)
-	}
-	a.watchMu.Unlock()
-
-	if changed {
-		a.wailsApp.Event.Emit("library:updated", rows)
-	}
-}
-
-func treeSignature(root string) string {
-	if root == "" {
-		return ""
-	}
-	info, err := os.Stat(root)
-	if err != nil {
-		return "missing:" + root
-	}
-	if !info.IsDir() {
-		return fileSignature(root)
-	}
-
-	var b strings.Builder
-	_ = filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
-		if err != nil {
-			b.WriteString("err:")
-			b.WriteString(path)
-			b.WriteString(";")
-			return nil
-		}
-		info, err := d.Info()
-		if err != nil {
-			return nil
-		}
-		rel, _ := filepath.Rel(root, path)
-		b.WriteString(rel)
-		b.WriteString("|")
-		b.WriteString(fmt.Sprintf("%d|%d|%t;", info.Size(), info.ModTime().UnixNano(), d.IsDir()))
-		return nil
-	})
-	return b.String()
-}
-
-func fileSignature(path string) string {
-	if path == "" {
-		return ""
-	}
-	info, err := os.Stat(path)
-	if err != nil {
-		return "missing:" + path
-	}
-	return fmt.Sprintf("%s|%d|%d", path, info.Size(), info.ModTime().UnixNano())
-}
-
-func downloadInventorySignature(root string) string {
-	titles, err := downloads.Scan(root)
-	if err != nil {
-		return "err:" + err.Error()
-	}
-	var b strings.Builder
-	for _, title := range titles {
-		b.WriteString(title.Mode)
-		b.WriteString("/")
-		b.WriteString(title.TitleID)
-		b.WriteString("|")
-		b.WriteString(title.LatestVersion)
-		b.WriteString("|")
-		b.WriteString(fmt.Sprint(title.FileCount))
-		b.WriteString(";")
-	}
-	return b.String()
+	a.wailsApp.Event.Emit("downloads:updated", titles)
 }
 
 // wailsEmitter adapts Wails application events to the jobs.Emitter shape.
-type wailsEmitter struct{ app *application.App }
+type wailsEmitter struct {
+	app       *application.App
+	onJobDone func()
+}
 
 func (e *wailsEmitter) Emit(event string, data any) {
-	if e.app == nil {
-		return
+	if e.app != nil {
+		e.app.Event.Emit(event, data)
 	}
-	e.app.Event.Emit(event, data)
+	if event == jobs.EventJobState && e.onJobDone != nil {
+		if job, ok := data.(jobs.Job); ok && job.State == jobs.StateDone {
+			e.onJobDone()
+		}
+	}
 }

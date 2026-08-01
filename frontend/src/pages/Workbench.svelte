@@ -3,7 +3,6 @@
   import type { Mode } from '../app/types'
   import {
     AutoDetectGamesYML,
-    CancelJob,
     ClearTitleCache,
     DeleteLibraryItems,
     EnqueueDownload,
@@ -13,7 +12,6 @@
     OpenFolder,
     PickDirectory,
     ReconcileLibraryPS3,
-    RetryJob,
     SearchPS3,
     SearchPS4,
     SearchVita,
@@ -72,13 +70,13 @@
       (job) => job.mode === 'ps3' && (job.kind || 'title_update') !== 'firmware' && job.state === 'done' && !job.installed_to
     )
   )
-  let visibleJobs = $derived($jobsList.slice().reverse())
 
   $effect(() => {
     if (mode !== lastMode) {
       source = normalizedSource(defaultDownload, mode)
       if (mode !== 'ps3') includeDRMFree = false
       lastMode = mode
+      if (mode === 'ps3' && emulatorState.initialized) void refreshEmulator()
     }
     downloadError = null
   })
@@ -106,12 +104,6 @@
 
   $effect(() => {
     const offs = [
-      Events.On('library:updated', ({ data: next }) => {
-        emulatorState.rows = Array.isArray(next) ? next : []
-      }),
-      Events.On('library:error', ({ data: msg }) => {
-        emulatorState.loadError = isMissingEmulatorConfig() ? null : msg
-      }),
       Events.On('downloads:updated', ({ data: next }) => {
         libraryState.titles = Array.isArray(next) ? next : []
         libraryState.loading = false
@@ -278,7 +270,6 @@
         await enqueueRow(row)
       }
       selectedDownloadBuckets[downloadSelectionKey] = []
-      await refreshLibrary()
     } catch (e) {
       downloadError = e instanceof Error ? e.message : String(e)
     }
@@ -288,7 +279,6 @@
     downloadError = null
     try {
       await enqueueRow(row)
-      await refreshLibrary()
     } catch (e) {
       downloadError = e instanceof Error ? e.message : String(e)
     }
@@ -360,8 +350,6 @@
     emulatorError = null
     try {
       await SyncTitlePS3(titleID)
-      await refreshLibrary()
-      await refreshEmulator()
     } catch (e) {
       emulatorError = e instanceof Error ? e.message : String(e)
     }
@@ -376,8 +364,6 @@
       for (const row of needed) {
         await SyncTitlePS3(row.title_id)
       }
-      await refreshLibrary()
-      await refreshEmulator()
     } catch (e) {
       emulatorError = e instanceof Error ? e.message : String(e)
     } finally {
@@ -405,28 +391,9 @@
     emulatorError = null
     try {
       await ClearTitleCache(titleID)
-      await refreshLibrary()
       await refreshEmulator()
     } catch (e) {
       emulatorError = e instanceof Error ? e.message : String(e)
-    }
-  }
-
-  async function cancelJob(id: string) {
-    downloadError = null
-    try {
-      await CancelJob(id)
-    } catch (e) {
-      downloadError = e instanceof Error ? e.message : String(e)
-    }
-  }
-
-  async function retryJob(id: string) {
-    downloadError = null
-    try {
-      await RetryJob(id)
-    } catch (e) {
-      downloadError = e instanceof Error ? e.message : String(e)
     }
   }
 
@@ -522,25 +489,6 @@
       i++
     }
     return `${v.toFixed(1)} ${units[i]}`
-  }
-
-  function formatProgress(job: jobs.Job): string {
-    if (!job.update?.size) return formatSize(job.downloaded)
-    return `${formatSize(job.downloaded)} / ${formatSize(job.update.size)}`
-  }
-
-  function canCancel(job: jobs.Job): boolean {
-    return ['queued', 'downloading', 'paused', 'resuming'].includes(String(job.state))
-  }
-
-  function canRetry(job: jobs.Job): boolean {
-    return ['failed', 'canceled'].includes(String(job.state))
-  }
-
-  function jobAttempt(job: jobs.Job): string {
-    const attempt = job.attempt || 1
-    const max = job.max_attempts || 1
-    return max > 1 ? `${attempt}/${max}` : ''
   }
 
   function compareVersion(a: string, b: string): number {
@@ -649,42 +597,6 @@
       </button>
     </div>
 
-    {#if visibleJobs.length > 0}
-      <div class="max-h-36 overflow-auto border-b border-border">
-        <table class="w-full text-xs">
-          <thead>
-            <tr>
-              <th>Queue</th>
-              <th>State</th>
-              <th>Progress</th>
-              <th>Try</th>
-              <th class="text-right">Action</th>
-            </tr>
-          </thead>
-          <tbody>
-            {#each visibleJobs as job (job.id)}
-              <tr>
-                <td>
-                  <div class="max-w-48 truncate" title={job.title_name || job.title_id}>{job.title_name || job.title_id}</div>
-                  <div class="font-mono text-[0.68rem] text-muted-soft">v{job.update?.version}</div>
-                </td>
-                <td class="text-muted">{job.state}</td>
-                <td class="text-muted">{formatProgress(job)}</td>
-                <td class="text-muted">{jobAttempt(job)}</td>
-                <td class="text-right">
-                  {#if canCancel(job)}
-                    <button onclick={() => cancelJob(job.id)} class="btn btn-secondary">Cancel</button>
-                  {:else if canRetry(job)}
-                    <button onclick={() => retryJob(job.id)} class="btn btn-secondary">Retry</button>
-                  {/if}
-                </td>
-              </tr>
-            {/each}
-          </tbody>
-        </table>
-      </div>
-    {/if}
-
     <div class="min-h-0 flex-1 overflow-auto">
       {#if firmwareLoading}
         <div class="empty">Loading latest firmware</div>
@@ -725,7 +637,7 @@
                 <td class="text-muted">{formatSize(row.size)}</td>
                 <td>
                   <button onclick={() => enqueueSingle(row)} disabled={isQueued(row)} class="btn btn-secondary">
-                    {isQueued(row) ? 'Queued' : 'Download'}
+                    {isQueued(row) ? 'In progress' : 'Download'}
                   </button>
                 </td>
               </tr>
@@ -742,6 +654,11 @@
         <h2>Emulator</h2>
         <p>{mode === 'ps3' ? 'Configured paths and install actions' : 'No actions for this platform'}</p>
       </div>
+      {#if mode === 'ps3'}
+        <button onclick={refreshEmulator} disabled={emulatorState.loading || isMissingEmulatorConfig()} class="btn btn-secondary">
+          Refresh
+        </button>
+      {/if}
     </div>
 
     {#if mode !== 'ps3'}

@@ -17,9 +17,6 @@ import type * as downloads$0 from "../../../../../PSNWDL/internal/downloads/mode
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
 import type * as jobs$0 from "../../../../../PSNWDL/internal/jobs/models.js";
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-ignore: Unused imports
-import type * as library$0 from "../../../../../PSNWDL/internal/library/models.js";
 
 declare module "@wailsio/runtime" {
     namespace Events {
@@ -31,8 +28,6 @@ declare module "@wailsio/runtime" {
             "job:added": jobs$0.Job;
             "job:progress": jobs$0.Job;
             "job:state": jobs$0.Job;
-            "library:error": string;
-            "library:updated": library$0.Row[];
         }
     }
 }

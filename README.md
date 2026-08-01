@@ -24,9 +24,9 @@ RPCS3 `dev_hdd0/game` tree — but the PKGs themselves are unmodified.
   optionally include DRM-free package rows when Sony advertises them.
 - **Latest firmware browser** — per-console firmware currently advertised by
   Sony's regional update lists, deduplicated by version.
-- **Download queue** — caches selected packages to disk and verifies SHA-1 on
-  completion, with final size checks, automatic retries, cancel support, and
-  operation details recorded in Activity.
+- **Shared download queue** — one application-wide concurrency limit covers
+  Download and Emulator actions. Active jobs and cancellation live in Activity;
+  packages are verified with final size/SHA-1 checks and automatic retries.
 - **Library manager** — shows downloaded title updates and firmware files,
   checks for newer versions of titles/firmware you already have, and supports
   checkbox deletion by title folder or individual file.
@@ -38,8 +38,9 @@ RPCS3 `dev_hdd0/game` tree — but the PKGs themselves are unmodified.
   `.pkg` files you are entitled to use; it discovers them recursively, groups
   by title, orders by version, and streams the extracts into `dev_hdd0/game`,
   stopping a title's group on first failure.
-- **Activity** — live log of every fetch, reconcile, download, verify,
-  and extract, filterable by scope (`psn` / `jobs` / `library` / `pkg`).
+- **Activity** — live active-job controls plus a log of every fetch, reconcile,
+  download, verify, and extract, filterable by scope (`psn` / `jobs` /
+  `library` / `pkg`).
 - **Light / dark / system theme** — applies live; persists in config.
 
 ---

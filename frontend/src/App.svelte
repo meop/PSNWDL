@@ -1,11 +1,11 @@
 <script lang="ts">
   import { onMount, untrack } from 'svelte'
   import { MODES, type Mode } from './app/types'
-  import { GetConfig, SetActiveMode } from '../bindings/PSNWDL/app'
+  import { GetConfig } from '../bindings/PSNWDL/app'
   import { Events } from '@wailsio/runtime'
   import * as config from '../bindings/PSNWDL/internal/config'
   import { theme, type Theme } from './app/theme.svelte'
-  import { wireJobEvents, hydrateJobs, aggregate, formatETA, formatThroughput } from './app/jobsStore.svelte'
+  import { wireJobEvents, hydrateJobs } from './app/jobsStore.svelte'
   import { wireActivityEvents, hydrateActivityLog } from './app/activityStore.svelte'
   import { applyStartupWindowSize } from './app/windowSizing'
   import Workbench from './pages/Workbench.svelte'
@@ -53,11 +53,6 @@
     return () => off()
   })
 
-  $effect(() => {
-    if (!booted) return
-    SetActiveMode(mode)
-  })
-
   function normalizeDefaultDownload(value: string | undefined): DefaultDownload {
     return value === 'title' ? 'title' : 'firmware'
   }
@@ -87,14 +82,6 @@
     </div>
 
     <div class="grow"></div>
-
-    {#if $aggregate}
-      <div class="hidden items-center gap-2 rounded border border-border bg-inset px-2 py-1 text-xs text-muted md:flex">
-        <span>{$aggregate.active} active</span>
-        <span>{formatThroughput($aggregate.throughputBps)}</span>
-        <span>{formatETA($aggregate.etaSeconds)}</span>
-      </div>
-    {/if}
 
     <button onclick={() => (overlay = 'settings')} disabled={!booted} title="Settings" aria-label="Settings" class="btn btn-secondary min-h-8 min-w-8 px-2">
       Settings

@@ -10,7 +10,6 @@ import (
 	"PSNWDL/internal/config"
 	"PSNWDL/internal/downloads"
 	"PSNWDL/internal/jobs"
-	"PSNWDL/internal/library"
 )
 
 //go:embed all:frontend/dist
@@ -24,8 +23,6 @@ func init() {
 	application.RegisterEvent[jobs.Job](jobs.EventJobAdded)
 	application.RegisterEvent[jobs.Job](jobs.EventJobProgress)
 	application.RegisterEvent[jobs.Job](jobs.EventJobState)
-	application.RegisterEvent[[]library.Row]("library:updated")
-	application.RegisterEvent[string]("library:error")
 }
 
 func main() {

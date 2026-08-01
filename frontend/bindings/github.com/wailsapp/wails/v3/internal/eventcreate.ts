@@ -18,9 +18,6 @@ import * as downloads$0 from "../../../../../PSNWDL/internal/downloads/models.js
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
 import * as jobs$0 from "../../../../../PSNWDL/internal/jobs/models.js";
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-ignore: Unused imports
-import * as library$0 from "../../../../../PSNWDL/internal/library/models.js";
 
 function configure() {
     Object.freeze(Object.assign($Create.Events, {
@@ -30,7 +27,6 @@ function configure() {
         "job:added": $$createType4,
         "job:progress": $$createType4,
         "job:state": $$createType4,
-        "library:updated": $$createType6,
     }));
 }
 
@@ -40,7 +36,5 @@ const $$createType1 = config$0.Config.createFrom;
 const $$createType2 = downloads$0.Title.createFrom;
 const $$createType3 = $Create.Array($$createType2);
 const $$createType4 = jobs$0.Job.createFrom;
-const $$createType5 = library$0.Row.createFrom;
-const $$createType6 = $Create.Array($$createType5);
 
 configure();

@@ -83,6 +83,19 @@ module root to regenerate the TS models/bindings, then rebuild.
    with the right scope so the Activity console narrates it. A scope offered
    as a filter chip with no producer is a dead UI element.
 
+9. **The four workbench panes refresh independently.** Download search refreshes
+   only its results; Emulator reconciliation runs only on initial load, explicit
+   refresh, relevant settings changes, or an Emulator action that changes the
+   installation. Completed jobs refresh the downloaded Library pane only. Do
+   not reintroduce periodic reconciliation or make cache changes fan out into
+   RPCS3 parsing and PSN requests.
+
+10. **The queue is application-wide and belongs to Activity.** Download and
+    Emulator actions share one backend queue and one concurrency limit. Show
+    only active jobs in Activity, remove them from that view at terminal state,
+    and keep history in the Activity log. Do not embed a queue table in either
+    top pane.
+
 ---
 
 ## Conventions
