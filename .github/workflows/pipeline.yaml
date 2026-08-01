@@ -100,12 +100,6 @@ jobs:
             echo "$UNFORMATTED"
             exit 1
           fi
-      - name: Build and vet Go code
-        run: |
-          go build ./...
-          go vet ./...
-      - name: Run Go tests with coverage
-        run: go test -coverprofile=coverage.out ./...
       - name: Generate Wails bindings
         run: wails3 generate bindings -clean=true -ts
       - name: Build and check frontend
@@ -113,6 +107,12 @@ jobs:
         run: |
           pnpm run build
           pnpm run check
+      - name: Build and vet Go code
+        run: |
+          go build ./...
+          go vet ./...
+      - name: Run Go tests with coverage
+        run: go test -coverprofile=coverage.out ./...
       - name: Build Wails application
         run: wails3 build
       - name: Verify generated files are committed
