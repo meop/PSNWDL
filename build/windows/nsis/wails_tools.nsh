@@ -1,4 +1,4 @@
-# DO NOT EDIT - Generated automatically by `wails3 task package`
+# DO NOT EDIT - Generated automatically by `wails build`
 
 !include "x64.nsh"
 !include "WinVer.nsh"

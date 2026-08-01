@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-labelledby="title desc">
+  <title id="title">PSNWDL application icon</title>
+  <desc id="desc">Geometric P and S letterforms riding above a centered download arrow and tray.</desc>
+  <rect x="60" y="60" width="904" height="904" rx="210" fill="#0f172a"/>
+  <g fill="none" stroke="#f8fafc" stroke-width="78" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M250 690V300M250 300C365 255 440 300 440 395S365 520 250 490"/>
+    <path d="M785 330C730 270 615 280 590 380C575 450 760 470 775 570C790 675 630 735 570 660"/>
+  </g>
+  <path d="M474 400H550V580H620L512 690L404 580H474Z" fill="#38bdf8"/>
+  <path d="M220 748H804" fill="none" stroke="#38bdf8" stroke-width="48" stroke-linecap="round"/>
+</svg>

@@ -29,7 +29,7 @@
   let defaultDownload = $state<DefaultDownload>(normalizeDefaultDownload(bootConfig?.ui?.default_download))
   let overlay = $state<Overlay>(null)
   let queueOpen = $state(false)
-  const appVersion = '0.1.0'
+  const appVersion = __APP_VERSION__
 
   onMount(async () => {
     try {

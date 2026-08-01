@@ -15,6 +15,11 @@ RPCS3 `dev_hdd0/game` tree — but the PKGs themselves are unmodified.
 > Sony's update endpoints are public; redistribution of downloaded packages is
 > not. This tool is for personal archival / emulator setup.
 
+The current application version is recorded in [`VERSION`](VERSION).
+Downloadable packages are produced for Windows, Linux, and macOS on both x64
+and ARM64 from the
+[GitHub Releases page](https://github.com/meop/PSNetDL/releases).
+
 ---
 
 ## Features
@@ -81,7 +86,7 @@ activity log, and RPCS3 reconcile/download/install flow.
 Install the Wails CLI once:
 
 ```sh
-go install github.com/wailsapp/wails/v3/cmd/wails3@latest
+go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-alpha2.121
 ```
 
 ### Runtime prerequisites
@@ -116,18 +121,73 @@ create the host platform's installer/package. The generated Wails 3 Taskfiles
 also provide Docker-backed cross-compilation tasks where the target requires
 platform tooling.
 
+Linux builds use GTK 4 and WebKitGTK 6.0. On Ubuntu 24.04 or newer, install
+their development packages before building:
+
+```sh
+sudo apt install build-essential pkg-config libgtk-4-dev libwebkitgtk-6.0-dev
+```
+
+### Versioning and release builds
+
+`VERSION` is the only file edited to change the application version. The
+frontend reads it directly. After changing it, synchronize Wails' generated
+platform metadata:
+
+```powershell
+./scripts/Sync-Version.ps1
+```
+
+Prerelease suffixes remain visible in the app, Linux packages, artifact names,
+tags, and GitHub releases. Numeric-only Windows and macOS metadata receives the
+three-part core version. For example, `1.2.3-rc1` becomes `1.2.3` only in those
+native numeric fields.
+
+The GitHub Actions pipeline validates every branch and pull request. A push to
+`main` whose `VERSION` has no existing `v<VERSION>` tag builds these artifacts:
+
+- Windows x64 and ARM64: per-user NSIS installer and portable ZIP
+- Linux x64 and ARM64: AppImage
+- macOS Intel and Apple Silicon: DMG
+- `SHA256SUMS.txt` covering every release artifact
+
+It then creates a signed tag, generates the changelog, and publishes the
+release. A hyphenated version such as `1.2.3-rc1` becomes a GitHub prerelease.
+Configure repository secrets `GPG_PRIVATE_KEY` and `GPG_PASSPHRASE` before the
+first release run. These secrets sign the Git tag; platform code-signing and
+Apple notarization are separate and are not yet configured, so Windows may show
+SmartScreen and macOS may show Gatekeeper warnings for these RC packages.
+
+### Application icons
+
+The icon generator defines custom geometric P/S letterforms over a flat
+download arrow and tray. On Windows, edit and run the generator to recreate the
+complete set:
+
+```powershell
+./scripts/Generate-Icons.ps1
+```
+
+This replaces the reviewable `build/appicon.svg` plus `build/appicon.png`,
+`build/windows/icon.ico`, and `build/darwin/icons.icns` from the same design
+definition.
+
 ---
 
 ## Project layout
 
 ```
 PSNWDL/
+├── VERSION                # single source of application/release version
+├── .github/workflows/     # validation, six-platform build matrix, release
 ├── app.go                 # Wails-bound methods (the app's public API surface)
 ├── main.go                # Wails app bootstrap
 ├── Taskfile.yml           # Wails 3 build/dev/package entry points
 ├── build/
-│   ├── config.yml         # product metadata + dev-mode configuration
+│   ├── appicon.svg        # generated reviewable vector application icon
+│   ├── config.yml         # generated product metadata + dev configuration
 │   └── {windows,darwin,linux}/ # platform Taskfiles and packaging assets
+├── scripts/               # version sync and canonical icon generator
 ├── internal/
 │   ├── activity/          # in-memory log ring buffer + event emitter
 │   ├── config/            # config.toml load/save, defaults, path helpers
@@ -183,6 +243,9 @@ next Settings save. RPCS3 paths selected in Settings must point to an existing
 TLS verification defaults off because several Sony endpoints use certificates
 that fail normal desktop validation.
 
+Set `PSNWDL_CONFIG` to override the config file path for testing or portable
+setups.
+
 ### Cache layout
 
 Downloaded files are separated by platform and content type. Firmware is grouped
@@ -227,7 +290,7 @@ using `time.Time` (or another unmapped type) — use an RFC3339 `string` instead
 ```sh
 go build ./...
 go vet ./...
-go test ./...
+go test -coverprofile=coverage.out ./...
 wails3 generate bindings -clean=true -ts
 cd frontend && pnpm install && pnpm run build && pnpm run check
 cd .. && wails3 build

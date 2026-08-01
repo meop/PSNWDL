@@ -1,0 +1,277 @@
+---
+name: Pipeline
+
+on:
+  push:
+    branches:
+      - '**'
+  pull_request:
+    branches:
+      - '**'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+permissions:
+  contents: read
+
+env:
+  GO_VERSION: '1.25.x'
+  NODE_VERSION: '26.3.1'
+  PNPM_VERSION: '11.18.0'
+  WAILS_VERSION: 'v3.0.0-alpha2.121'
+
+jobs:
+  version:
+    name: Version
+    runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.check.outputs.changed }}
+      new_version: ${{ steps.check.outputs.version }}
+      prerelease: ${{ steps.check.outputs.prerelease }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Check for version tag
+        id: check
+        shell: bash
+        run: |
+          VERSION=$(tr -d '[:space:]' < VERSION)
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+([+-][0-9A-Za-z.-]+)?$ ]]; then
+            echo "Invalid semantic version: $VERSION" >&2
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          if [[ "$VERSION" == *-* ]]; then
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          fi
+          if git rev-parse "v$VERSION" >/dev/null 2>&1; then
+            echo "Tag v$VERSION already exists. Skipping release jobs."
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "Tag v$VERSION does not exist. Enabling release jobs."
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  validate:
+    name: Validate
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+      - name: Install Linux build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes build-essential pkg-config libgtk-4-dev libwebkitgtk-6.0-dev
+      - name: Install Wails CLI
+        run: go install github.com/wailsapp/wails/v3/cmd/wails3@${{ env.WAILS_VERSION }}
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile
+      - name: Verify generated version metadata
+        shell: pwsh
+        run: ./scripts/Sync-Version.ps1
+      - name: Verify Go formatting
+        shell: bash
+        run: |
+          UNFORMATTED=$(find . -name '*.go' -not -path './frontend/*' -print0 | xargs -0 gofmt -l)
+          if [[ -n "$UNFORMATTED" ]]; then
+            echo "$UNFORMATTED"
+            exit 1
+          fi
+      - name: Build and vet Go code
+        run: |
+          go build ./...
+          go vet ./...
+      - name: Run Go tests with coverage
+        run: go test -coverprofile=coverage.out ./...
+      - name: Generate Wails bindings
+        run: wails3 generate bindings -clean=true -ts
+      - name: Build and check frontend
+        working-directory: frontend
+        run: |
+          pnpm run build
+          pnpm run check
+      - name: Build Wails application
+        run: wails3 build
+      - name: Verify generated files are committed
+        shell: bash
+        run: git diff --exit-code
+
+  build:
+    name: Build ${{ matrix.name }}
+    needs: [version, validate]
+    if: github.ref == 'refs/heads/main' && needs.version.outputs.changed == 'true'
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Windows x64
+            runner: windows-latest
+            os: windows
+            arch: amd64
+          - name: Windows ARM64
+            runner: windows-11-arm
+            os: windows
+            arch: arm64
+          - name: Linux x64
+            runner: ubuntu-24.04
+            os: linux
+            arch: amd64
+          - name: Linux ARM64
+            runner: ubuntu-24.04-arm
+            os: linux
+            arch: arm64
+          - name: macOS Intel
+            runner: macos-15-intel
+            os: darwin
+            arch: amd64
+          - name: macOS Apple Silicon
+            runner: macos-15
+            os: darwin
+            arch: arm64
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+      - name: Install Linux build dependencies
+        if: matrix.os == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes build-essential pkg-config libgtk-4-dev libwebkitgtk-6.0-dev
+      - name: Install NSIS
+        if: matrix.os == 'windows'
+        shell: pwsh
+        run: choco install nsis --yes --no-progress
+      - name: Install Wails CLI
+        run: go install github.com/wailsapp/wails/v3/cmd/wails3@${{ env.WAILS_VERSION }}
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile
+      - name: Synchronize version metadata
+        shell: pwsh
+        run: ./scripts/Sync-Version.ps1
+      - name: Build Windows packages
+        if: matrix.os == 'windows'
+        shell: pwsh
+        run: |
+          wails3 task windows:create:nsis:installer ARCH=${{ matrix.arch }} INSTALL_SCOPE=user
+          New-Item -ItemType Directory -Force staging | Out-Null
+          $version = (Get-Content VERSION -Raw).Trim()
+          $installer = Get-Item "bin/PSNWDL-${{ matrix.arch }}-installer.exe"
+          Copy-Item $installer.FullName "staging/PSNWDL-$version-windows-${{ matrix.arch }}-installer.exe"
+          Compress-Archive -Path bin/PSNWDL.exe -DestinationPath "staging/PSNWDL-$version-windows-${{ matrix.arch }}-portable.zip"
+      - name: Build Linux AppImage
+        if: matrix.os == 'linux'
+        shell: bash
+        run: |
+          wails3 task linux:create:appimage ARCH=${{ matrix.arch }}
+          mkdir -p staging
+          version=$(tr -d '[:space:]' < VERSION)
+          shopt -s nullglob
+          appimages=(bin/PSNWDL-*.AppImage)
+          if (( ${#appimages[@]} != 1 )); then
+            echo "Expected one AppImage, found ${#appimages[@]}" >&2
+            exit 1
+          fi
+          mv "${appimages[0]}" "staging/PSNWDL-$version-linux-${{ matrix.arch }}.AppImage"
+      - name: Build macOS disk image
+        if: matrix.os == 'darwin'
+        shell: bash
+        run: |
+          wails3 task darwin:package:dmg ARCH=${{ matrix.arch }}
+          mkdir -p staging
+          version=$(tr -d '[:space:]' < VERSION)
+          mv bin/PSNWDL.dmg "staging/PSNWDL-$version-macos-${{ matrix.arch }}.dmg"
+      - name: Upload package artifacts
+        uses: actions/upload-artifact@v6
+        with:
+          name: PSNWDL-${{ matrix.os }}-${{ matrix.arch }}
+          path: staging/*
+          if-no-files-found: error
+
+  release:
+    name: Release
+    needs: [version, build]
+    if: github.ref == 'refs/heads/main' && needs.version.outputs.changed == 'true'
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Download package artifacts
+        uses: actions/download-artifact@v7
+        with:
+          path: artifacts
+          merge-multiple: true
+      - name: Import GPG key
+        uses: crazy-max/ghaction-import-gpg@v7
+        with:
+          gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
+          passphrase: ${{ secrets.GPG_PASSPHRASE }}
+          git_user_signingkey: true
+          git_tag_gpgsign: true
+      - name: Create signed tag
+        run: |
+          git tag -s "v${{ needs.version.outputs.new_version }}" -m "Release v${{ needs.version.outputs.new_version }}"
+          git push origin "v${{ needs.version.outputs.new_version }}"
+      - name: Build changelog
+        id: changelog
+        uses: mikepenz/release-changelog-builder-action@v6
+        with:
+          commitMode: true
+          configuration: |
+            {
+              "commit_template": "- #{{SUMMARY}} ([#{{SHA}}](https://github.com/${{ github.repository }}/commit/#{{SHA}}))"
+            }
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Generate checksums
+        working-directory: artifacts
+        run: sha256sum * > SHA256SUMS.txt
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: v${{ needs.version.outputs.new_version }}
+          body: ${{ steps.changelog.outputs.changelog }}
+          files: artifacts/*
+          draft: false
+          prerelease: ${{ needs.version.outputs.prerelease }}

@@ -10,6 +10,7 @@ left behind that we then had to clean up.
 ## The one command that defines "done"
 
 ```sh
+pwsh ./scripts/Sync-Version.ps1
 go build ./...
 go vet ./...
 go test ./...
@@ -22,6 +23,8 @@ A change is not finished until **all** of these pass, and `pnpm run check`
 reports **`0 errors and 0 warnings`**. The "0 warnings" part is non-negotiable —
 warnings accumulate into the visual/behavioral bugs this project was created to
 fix. If you can't get to 0/0, say so explicitly rather than declaring success.
+After version, binding, or generated-asset changes, `git diff --check` and
+`git diff --exit-code` after rerunning the relevant generator must also pass.
 
 ## Architecture in one paragraph
 
@@ -115,6 +118,23 @@ module root to regenerate the TS models/bindings, then rebuild.
     title folders not represented in RPCS3. Never reduce this to a
     highest-version comparison; gaps between versions must remain detectable.
 
+14. **`VERSION` is the only hand-edited application version.** The frontend
+    reads it directly. Run `pwsh ./scripts/Sync-Version.ps1` to update Wails'
+    committed platform metadata. Prerelease suffixes stay in the app, Linux
+    package metadata, tags, and filenames; Windows/macOS numeric-only fields use
+    the three-part core. Do not hand-edit version strings elsewhere.
+
+15. **The icon set has one design source.** `scripts/Generate-Icons.ps1` is
+    canonical. On Windows it regenerates the reviewable `build/appicon.svg`,
+    `build/appicon.png`, `build/windows/icon.ico`, and
+    `build/darwin/icons.icns`. Do not independently edit the derived assets.
+
+16. **Desktop releases cover the complete x64/ARM64 matrix.** The GitHub
+    workflow builds Windows, Linux, and macOS for both architectures using
+    native hosted runners. Keep signed-tag/changelog/release publishing aligned
+    with the WinEnvEdit workflow and preserve prerelease detection from the
+    `VERSION` suffix.
+
 ---
 
 ## Conventions
@@ -179,11 +199,13 @@ These all happened in a prior pass and were fixed — they tend to recur:
 | Add a page | `frontend/src/pages/`, register in `frontend/src/app/types.ts` and `App.svelte` visibility rules |
 | Add a shared store | `frontend/src/app/*.svelte.ts` |
 | Change colors / add a theme token | `frontend/src/style.css` |
+| Change the application version | `VERSION`, then `scripts/Sync-Version.ps1` |
+| Change the application icon | `scripts/Generate-Icons.ps1`, then run it |
+| Change CI packaging/releases | `.github/workflows/pipeline.yaml` |
 
 ---
 
 ## Current TODO State
 
-`meop/PSNWDL/TODO` currently has no open items. `PLAN.md` was the original build
-plan and has been removed because it was stale. If a new TODO appears, keep
-README/AGENTS aligned with product decisions when implementing it.
+There are no tracked TODO/plan files. If a new TODO appears, keep README and
+AGENTS aligned with product decisions when implementing it.
