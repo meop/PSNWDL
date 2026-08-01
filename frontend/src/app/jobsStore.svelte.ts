@@ -54,6 +54,7 @@ const ACTIVE: ReadonlySet<string> = new Set([
   'queued',
   'downloading',
   'paused',
+  'resuming',
   'verifying',
   'installing',
 ])

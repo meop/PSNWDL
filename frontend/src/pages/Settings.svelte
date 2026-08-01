@@ -286,7 +286,7 @@
             </div>
             <span></span>
 
-            <label for="timeout" class="pt-1 text-muted">Request timeout seconds</label>
+            <label for="timeout" class="pt-1 text-muted">Connection timeout seconds</label>
             <div>
               <input
                 id="timeout"
@@ -298,7 +298,7 @@
                 class="input w-full px-2 py-1 text-sm"
               />
             </div>
-            <span></span>
+            <span class="pt-1 text-muted-soft">Applies to connection setup and response headers, not total download time.</span>
 
             <label for="retry-count" class="pt-1 text-muted">Retry count</label>
             <div>

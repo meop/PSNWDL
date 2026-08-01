@@ -13,6 +13,7 @@
     OpenFolder,
     PickDirectory,
     ReconcileLibraryPS3,
+    RetryJob,
     SearchPS3,
     SearchPS4,
     SearchVita,
@@ -41,12 +42,12 @@
   type Source = 'title' | 'firmware'
   type Title = downloads.Title
   type File = downloads.File
+  const ACTIVE_JOB_STATES = new Set(['queued', 'downloading', 'paused', 'resuming', 'verifying'])
 
   let { mode, defaultDownload = 'firmware', appConfig }: Props = $props()
 
   let source = $state<Source>('firmware')
   let selectedDownloadBuckets = $state<Record<string, string[]>>({})
-  let firmwareQueued = $state<string[]>([])
   let downloadError = $state<string | null>(null)
   let emulatorError = $state<string | null>(null)
   let syncingAll = $state(false)
@@ -211,7 +212,6 @@
       titleState.loading = true
       titleState.error = null
       titleState.result = null
-      titleState.queued = []
       selectedDownloadBuckets[downloadSelectionKey] = []
       downloadError = null
     try {
@@ -267,11 +267,6 @@
       update: row.update,
     })
     await EnqueueDownload(req)
-    if (row.kind === 'Firmware') {
-      if (!firmwareQueued.includes(row.key)) firmwareQueued = [...firmwareQueued, row.key]
-    } else if (!titleState.queued.includes(row.key)) {
-      titleState.queued = [...titleState.queued, row.key]
-    }
   }
 
   async function enqueueSelected() {
@@ -426,6 +421,15 @@
     }
   }
 
+  async function retryJob(id: string) {
+    downloadError = null
+    try {
+      await RetryJob(id)
+    } catch (e) {
+      downloadError = e instanceof Error ? e.message : String(e)
+    }
+  }
+
   async function installPKGFolder() {
     if (!emulatorState.cfg || isMissingEmulatorConfig()) return
     const picked = await PickDirectory('Select PS3 PKG folder', emulatorState.cfg.storage.library_dir)
@@ -457,7 +461,12 @@
   }
 
   function isQueued(row: DownloadRow): boolean {
-    return row.kind === 'Firmware' ? firmwareQueued.includes(row.key) : titleState.queued.includes(row.key)
+    return $jobsList.some(
+      (job) =>
+        ACTIVE_JOB_STATES.has(String(job.state)) &&
+        job.mode === mode &&
+        job.update?.url === row.url
+    )
   }
 
   function selectedDownload(key: string): boolean {
@@ -522,6 +531,10 @@
 
   function canCancel(job: jobs.Job): boolean {
     return ['queued', 'downloading', 'paused', 'resuming'].includes(String(job.state))
+  }
+
+  function canRetry(job: jobs.Job): boolean {
+    return ['failed', 'canceled'].includes(String(job.state))
   }
 
   function jobAttempt(job: jobs.Job): string {
@@ -661,6 +674,8 @@
                 <td class="text-right">
                   {#if canCancel(job)}
                     <button onclick={() => cancelJob(job.id)} class="btn btn-secondary">Cancel</button>
+                  {:else if canRetry(job)}
+                    <button onclick={() => retryJob(job.id)} class="btn btn-secondary">Retry</button>
                   {/if}
                 </td>
               </tr>

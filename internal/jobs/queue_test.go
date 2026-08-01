@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha1"
 	"encoding/hex"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -226,6 +227,46 @@ func TestEnqueue_BadStatus(t *testing.T) {
 	}
 }
 
+func TestEnqueue_DownloadCanOutliveRequestTimeout(t *testing.T) {
+	home := t.TempDir()
+	setHomeDir(t, home)
+
+	body := []byte("firmware payload")
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Length", fmt.Sprintf("%d", len(body)))
+		w.WriteHeader(http.StatusOK)
+		w.(http.Flusher).Flush()
+		time.Sleep(1100 * time.Millisecond)
+		_, _ = w.Write(body)
+	}))
+	defer server.Close()
+
+	act := activity.NewSink(NoopEmitter{})
+	q := NewQueue(config.Network{
+		MaxConcurrentDownloads: 1,
+		VerifyTLS:              true,
+		RequestTimeoutSeconds:  1,
+	}, "", NoopEmitter{}, act)
+
+	id, err := q.Enqueue(context.Background(), Request{
+		TitleID: "firmware",
+		Mode:    "ps3",
+		Kind:    KindFirmware,
+		Update: psn.Update{
+			Version: "4.93",
+			URL:     server.URL + "/PS3UPDAT.PUP",
+			Size:    int64(len(body)),
+		},
+	})
+	if err != nil {
+		t.Fatalf("Enqueue: %v", err)
+	}
+
+	if state := waitForTerminal(t, q, id, 3*time.Second); state != StateDone {
+		t.Fatalf("final state = %s, want done", state)
+	}
+}
+
 func TestEnqueue_Validation(t *testing.T) {
 	act := activity.NewSink(NoopEmitter{})
 	q := NewQueue(config.Network{}, "", NoopEmitter{}, act)
@@ -236,6 +277,36 @@ func TestEnqueue_Validation(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal("expected error for missing URL, got nil")
+	}
+}
+
+func TestEnqueue_ReturnsExistingActiveJobForSameDestination(t *testing.T) {
+	q := NewQueue(config.Network{}, t.TempDir(), NoopEmitter{}, activity.NewSink(NoopEmitter{}))
+	req := Request{
+		TitleID: "firmware",
+		Mode:    "ps3",
+		Kind:    KindFirmware,
+		Update:  psn.Update{Version: "4.93", URL: "https://example.com/PS3UPDAT.PUP"},
+	}
+	dest, err := q.destinationPath(req)
+	if err != nil {
+		t.Fatalf("destinationPath: %v", err)
+	}
+	q.jobs["job-existing"] = &Job{
+		ID:       "job-existing",
+		DestPath: dest,
+		State:    StateDownloading,
+	}
+
+	id, err := q.Enqueue(context.Background(), req)
+	if err != nil {
+		t.Fatalf("Enqueue: %v", err)
+	}
+	if id != "job-existing" {
+		t.Fatalf("id = %q, want existing job id", id)
+	}
+	if got := len(q.List()); got != 1 {
+		t.Fatalf("job count = %d, want 1", got)
 	}
 }
 

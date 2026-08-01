@@ -6,7 +6,6 @@ export interface SearchState {
   loading: boolean
   error: string | null
   result: psn.Title | null
-  queued: string[]
 }
 
 function emptyState(): SearchState {
@@ -15,7 +14,6 @@ function emptyState(): SearchState {
     loading: false,
     error: null,
     result: null,
-    queued: [],
   }
 }
 

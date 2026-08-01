@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -83,15 +84,26 @@ func normalizedRetryCount(retryCount int) int {
 	return retryCount
 }
 
-func newHTTPClient(net config.Network) *http.Client {
-	transport := &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: !net.VerifyTLS}, // #nosec G402 — PSN endpoints
-	}
-	timeout := time.Duration(net.RequestTimeoutSeconds) * time.Second
+func newHTTPClient(network config.Network) *http.Client {
+	timeout := time.Duration(network.RequestTimeoutSeconds) * time.Second
 	if timeout <= 0 {
 		timeout = 15 * time.Second
 	}
-	return &http.Client{Transport: transport, Timeout: timeout}
+
+	// RequestTimeoutSeconds limits connection setup and response headers, not
+	// the complete response body. Firmware and game packages can take hours to
+	// download; http.Client.Timeout would abort every transfer once this short
+	// request timeout elapsed. The request context still provides cancellation.
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.DialContext = (&net.Dialer{
+		Timeout:   timeout,
+		KeepAlive: 30 * time.Second,
+	}).DialContext
+	transport.ResponseHeaderTimeout = timeout
+	transport.TLSHandshakeTimeout = timeout
+	transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: !network.VerifyTLS} // #nosec G402 — PSN endpoints
+
+	return &http.Client{Transport: transport}
 }
 
 func (q *Queue) SetLibraryDir(libraryDir string) {
@@ -166,6 +178,13 @@ func (q *Queue) Enqueue(parent context.Context, req Request) (string, error) {
 	j.MaxAttempts = q.retries() + 1
 
 	q.mu.Lock()
+	for _, existing := range q.jobs {
+		if existing.DestPath == dest && isActiveJobState(existing.State) {
+			id := existing.ID
+			q.mu.Unlock()
+			return id, nil
+		}
+	}
 	q.jobs[j.ID] = j
 	q.mu.Unlock()
 
@@ -174,6 +193,15 @@ func (q *Queue) Enqueue(parent context.Context, req Request) (string, error) {
 
 	go q.run(parent, j)
 	return j.ID, nil
+}
+
+func isActiveJobState(state JobState) bool {
+	switch state {
+	case StateQueued, StateDownloading, StatePaused, StateResuming, StateVerifying, StateInstalling:
+		return true
+	default:
+		return false
+	}
 }
 
 // Cancel stops an in-flight job. No-op for finished jobs.

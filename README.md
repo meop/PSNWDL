@@ -171,7 +171,7 @@ library_dir = "/home/you/.psnwdl/download"  # base folder for downloaded files
 [network]
 max_concurrent_downloads = 5
 verify_tls = false
-request_timeout_seconds = 15
+request_timeout_seconds = 15 # metadata requests and download connection/header timeout
 retry_count = 3
 
 [ui]
