@@ -182,7 +182,7 @@ PSNWDL/
 ├── .github/workflows/     # validation, six-platform build matrix, release
 ├── app.go                 # Wails-bound methods (the app's public API surface)
 ├── main.go                # Wails app bootstrap
-├── Taskfile.yml           # Wails 3 build/dev/package entry points
+├── Taskfile.yaml          # Wails 3 build/dev/package entry points
 ├── build/
 │   ├── appicon.svg        # generated reviewable vector application icon
 │   ├── config.yml         # generated product metadata + dev configuration
