@@ -61,7 +61,7 @@
 <div class:page={!compact && !embedded} class:h-full={embedded} class:min-h-0={embedded} class:flex={embedded} class:flex-col={embedded}>
   <div class="{embedded ? 'mb-0 border-b border-border px-3 py-2' : 'page-header'} flex items-center justify-between gap-3">
     <div>
-      <h1 class="{embedded ? 'text-sm font-semibold text-fg-strong' : 'page-title'}">Activity</h1>
+      <h1 class="{embedded ? 'text-[0.95rem] font-[650] leading-[1.2] text-fg-strong' : 'page-title'}">Activity</h1>
       <p class="mt-1 text-xs text-muted">PSN, jobs, library, and PKG operations</p>
     </div>
     <div class="flex items-center gap-2">

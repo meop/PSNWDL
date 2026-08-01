@@ -697,10 +697,10 @@
 </script>
 
 <div class="workbench">
-  <section class="panel flex min-h-0 flex-col overflow-hidden">
+  <section class="downloader-panel panel flex min-h-0 flex-col overflow-hidden">
     <div class="panel-head">
       <div>
-        <h2>Download</h2>
+        <h2>Downloader</h2>
         <p>{mode.toUpperCase()} discovery and queueing</p>
       </div>
       <form
@@ -797,7 +797,7 @@
     </div>
   </section>
 
-  <section class="panel flex min-h-0 flex-col overflow-hidden">
+  <section class="emulator-panel panel flex min-h-0 flex-col overflow-hidden">
     <div class="panel-head">
       <div>
         <h2>Emulator</h2>
@@ -901,7 +901,7 @@
     {/if}
   </section>
 
-  <section class="panel flex min-h-0 flex-col overflow-hidden">
+  <section class="library-panel panel flex min-h-0 flex-col overflow-hidden">
     <div class="panel-head">
       <div>
         <h2>Library</h2>
@@ -1109,7 +1109,7 @@
     </div>
   </section>
 
-  <section class="panel flex min-h-0 flex-col overflow-hidden">
+  <section class="activity-panel panel flex min-h-0 flex-col overflow-hidden">
     <Activity embedded />
   </section>
 </div>
@@ -1119,9 +1119,28 @@
     display: grid;
     grid-template-columns: minmax(24rem, 1fr) minmax(24rem, 1fr);
     grid-template-rows: minmax(17rem, 1fr) minmax(17rem, 1fr);
+    grid-template-areas:
+      'downloader activity'
+      'emulator library';
     gap: 0.75rem;
     min-height: 0;
     height: 100%;
+  }
+
+  .downloader-panel {
+    grid-area: downloader;
+  }
+
+  .activity-panel {
+    grid-area: activity;
+  }
+
+  .emulator-panel {
+    grid-area: emulator;
+  }
+
+  .library-panel {
+    grid-area: library;
   }
 
   .panel-head {
@@ -1244,12 +1263,13 @@
   @media (max-width: 900px) {
     .workbench {
       grid-template-columns: 1fr;
-      grid-template-rows: minmax(18rem, auto) minmax(18rem, auto) minmax(18rem, 1fr);
+      grid-template-rows: repeat(4, minmax(18rem, auto));
+      grid-template-areas:
+        'downloader'
+        'activity'
+        'emulator'
+        'library';
       overflow: auto;
-    }
-
-    .library-panel {
-      grid-column: auto;
     }
   }
 </style>
