@@ -3,3 +3,4 @@ build/bin
 .task
 node_modules
 frontend/dist
+coverage.out

@@ -18,7 +18,7 @@ RPCS3 `dev_hdd0/game` tree — but the PKGs themselves are unmodified.
 The current application version is recorded in [`VERSION`](VERSION).
 Downloadable packages are produced for Windows, Linux, and macOS on both x64
 and ARM64 from the
-[GitHub Releases page](https://github.com/meop/PSNetDL/releases).
+[GitHub Releases page](https://github.com/meop/PSNWDL/releases).
 
 ---
 
@@ -144,7 +144,7 @@ three-part core version. For example, `1.2.3-rc1` becomes `1.2.3` only in those
 native numeric fields.
 
 The GitHub Actions pipeline validates every branch and pull request. A push to
-`main` whose `VERSION` has no existing `v<VERSION>` tag builds these artifacts:
+`master` whose `VERSION` has no existing GitHub release builds these artifacts:
 
 - Windows x64 and ARM64: per-user NSIS installer and portable ZIP
 - Linux x64 and ARM64: AppImage
@@ -290,7 +290,7 @@ using `time.Time` (or another unmapped type) — use an RFC3339 `string` instead
 ```sh
 go build ./...
 go vet ./...
-go test -coverprofile=coverage.out ./...
+go test -coverprofile coverage.out ./...
 wails3 generate bindings -clean=true -ts
 cd frontend && pnpm install && pnpm run build && pnpm run check
 cd .. && wails3 build
