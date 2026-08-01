@@ -603,15 +603,15 @@
       {:else if downloadRows.length === 0}
         <div class="empty">{source === 'title' ? 'Title update results' : 'Latest firmware by region'}</div>
       {:else}
-        <table class="w-full text-sm">
+        <table class="w-full table-fixed text-sm">
           <thead>
             <tr>
               <th class="w-8"></th>
-              <th>Kind</th>
-              <th>Version</th>
+              <th class="w-24">Kind</th>
+              <th class="w-24">Version</th>
               <th>Scope</th>
-              <th>Size</th>
-              <th>Action</th>
+              <th class="w-24">Size</th>
+              <th class="w-28">Action</th>
             </tr>
           </thead>
           <tbody>
@@ -627,7 +627,7 @@
                 </td>
                 <td>{row.kind}</td>
                 <td class="font-mono">v{row.version}</td>
-                <td class="text-muted">
+                <td class="truncate text-muted">
                   {#if row.kind === 'Firmware'}
                     {row.locale} · {row.type}
                   {:else}
@@ -636,7 +636,7 @@
                 </td>
                 <td class="text-muted">{formatSize(row.size)}</td>
                 <td>
-                  <button onclick={() => enqueueSingle(row)} disabled={isQueued(row)} class="btn btn-secondary">
+                  <button onclick={() => enqueueSingle(row)} disabled={isQueued(row)} class="btn btn-secondary w-24 justify-center">
                     {isQueued(row) ? 'In progress' : 'Download'}
                   </button>
                 </td>
@@ -799,7 +799,7 @@
                     <div class="grid grid-cols-[auto_1fr_auto] items-center gap-3 px-3 py-2 text-sm">
                       <input
                         type="checkbox"
-                        checked={selected(file.path)}
+                        checked={selected(title.path) || selected(file.path)}
                         disabled={selected(title.path)}
                         aria-label={`Select ${file.name}`}
                         onchange={(e) => setSelected(file.path, e.currentTarget.checked)}

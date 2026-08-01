@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tick } from 'svelte'
   import { CancelJob } from '../../bindings/PSNWDL/app'
   import type * as jobs from '../../bindings/PSNWDL/internal/jobs'
   import { activityEntries, clearActivityLog, formatLogLine } from '../app/activityStore.svelte'
@@ -18,12 +19,6 @@
   let logContainer: HTMLElement
   const ACTIVE_JOB_STATES = new Set(['queued', 'downloading', 'paused', 'resuming', 'verifying', 'installing'])
   let activeJobs = $derived($jobsList.filter((job) => ACTIVE_JOB_STATES.has(String(job.state))))
-
-  $effect(() => {
-    if (!paused && logContainer) {
-      logContainer.scrollTop = logContainer.scrollHeight
-    }
-  })
 
   async function clearLog() {
     await clearActivityLog()
@@ -69,6 +64,18 @@
   let filteredEntries = $derived(
     logEntries.filter((entry) => selectedScope === 'all' || entry.scope === selectedScope)
   )
+
+  $effect(() => {
+    const entries = filteredEntries
+    const jobs = activeJobs
+    if (paused || !logContainer) return
+
+    void tick().then(() => {
+      if (!paused && logContainer && entries === filteredEntries && jobs === activeJobs) {
+        logContainer.scrollTop = logContainer.scrollHeight
+      }
+    })
+  })
 
   function formatTimestamp(ts: string): string {
     return new Date(ts).toLocaleTimeString()
