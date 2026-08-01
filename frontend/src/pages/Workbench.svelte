@@ -78,6 +78,7 @@
   let cachedFirmware = $derived($cache[mode] ?? null)
   let downloadColumnLabels = $derived(['Kind', 'Version', source === 'firmware' ? 'Region' : 'Scope', 'Size', 'Action'])
   let firmwareLoading = $derived($fetching === mode && !cachedFirmware?.list)
+  let emulatorSyncActive = $derived(emulatorSyncJobIDs.length > 0)
   let selectedLibraryCount = $derived(libraryState.selected.length)
   $effect(() => {
     if (mode !== lastMode) {
@@ -252,6 +253,7 @@
   }
 
   async function refreshSource() {
+    if (!canSourceSearch) return
     if (source === 'firmware') {
       await refreshFirmware(true)
     } else {
@@ -303,7 +305,7 @@
   }
 
   async function deleteSelectedLibrary() {
-    if (libraryState.selected.length === 0) return
+    if (libraryState.selected.length === 0 || libraryState.deleting) return
     libraryState.deleting = true
     libraryState.error = null
     try {
@@ -318,7 +320,7 @@
   }
 
   async function refreshEmulator(initialLoad = false) {
-    if (mode !== 'ps3' && !initialLoad) return
+    if (emulatorRefreshing || (mode !== 'ps3' && !initialLoad)) return
     if (isMissingGamesConfig()) {
       emulatorState.rows = []
       emulatorState.loadError = null
@@ -379,6 +381,7 @@
   }
 
   async function syncTitle(titleID: string) {
+    if (titleDownloadInProgress(titleID)) return
     emulatorError = null
     try {
       const jobIDs = (await SyncTitlePS3(titleID)) ?? []
@@ -389,6 +392,7 @@
   }
 
   async function syncAllNeeded() {
+    if (syncingAll || emulatorSyncActive || emulatorRefreshing || isMissingGamesConfig() || emulatorState.loadError) return
     syncingAll = true
     emulatorError = null
     try {
@@ -405,7 +409,7 @@
   }
 
   async function installAll() {
-    if (pendingPKGCount === 0 || isMissingInstallConfig()) return
+    if (installingAll || pendingPKGCount === 0 || isMissingInstallConfig()) return
     installingAll = true
     emulatorError = null
     try {
@@ -807,7 +811,7 @@
         <div class="flex flex-wrap items-center justify-end gap-2">
           <button
             onclick={syncAllNeeded}
-            disabled={syncingAll || emulatorRefreshing || isMissingGamesConfig() || Boolean(emulatorState.loadError)}
+            disabled={syncingAll || emulatorSyncActive || emulatorRefreshing || isMissingGamesConfig() || Boolean(emulatorState.loadError)}
             class="btn btn-primary"
           >
             Sync all
