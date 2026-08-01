@@ -657,7 +657,7 @@
               <th class="w-24">Version</th>
               <th>Scope</th>
               <th class="w-24">Size</th>
-              <th class="w-32 text-right">Action</th>
+              <th class="w-32">Action</th>
             </tr>
           </thead>
           <tbody>
@@ -681,7 +681,7 @@
                   {/if}
                 </td>
                 <td class="text-muted">{formatSize(row.size)}</td>
-                <td class="text-right">
+                <td>
                   <button onclick={() => enqueueSingle(row)} disabled={isQueued(row)} class="btn btn-primary w-24 justify-center">
                     {isQueued(row) ? 'In progress' : 'Download'}
                   </button>
@@ -749,7 +749,7 @@
                 <th>Title</th>
                 <th>Installed -> Server</th>
                 <th>Status</th>
-                <th class="w-52 text-right">Action</th>
+                <th class="w-52">Action</th>
               </tr>
             </thead>
             <tbody>
@@ -767,8 +767,8 @@
                       {STATUS_LABEL[row.status] ?? row.status}
                     </span>
                   </td>
-                  <td class="text-right">
-                    <div class="flex justify-end gap-1">
+                  <td>
+                    <div class="flex gap-1">
                       {#if row.status === 'update_available' || row.status === 'missing_all'}
                         <button onclick={() => syncTitle(row.title_id)} disabled={titleDownloadInProgress(row.title_id)} class="btn btn-primary">
                           {titleDownloadInProgress(row.title_id) ? 'In progress' : 'Download'}
@@ -941,10 +941,6 @@
     position: sticky;
     top: 0;
     z-index: 1;
-  }
-
-  th.text-right {
-    text-align: right;
   }
 
   td {
