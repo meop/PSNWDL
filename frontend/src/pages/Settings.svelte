@@ -24,8 +24,10 @@
   let gamesYMLError = $state('')
   let hdd0Input = $state('')
   let hdd0Error = $state('')
-  let maxConcurrent = $state(5)
-  let retryCount = $state(3)
+  let parallelDownloads = $state(5)
+  let retries = $state(3)
+  let timeoutSeconds = $state(15)
+  let verifyTLS = $state(false)
 
   onMount(async () => {
     await hydrateSettings()
@@ -45,8 +47,10 @@
     gamesYMLError = ''
     hdd0Input = nextCfg.rpcs3.hdd0_game
     hdd0Error = ''
-    maxConcurrent = nextCfg.network.max_concurrent_downloads
-    retryCount = nextCfg.network.retry_count
+    parallelDownloads = nextCfg.network.parallel_downloads
+    retries = nextCfg.network.retries
+    timeoutSeconds = nextCfg.network.timeout_seconds
+    verifyTLS = nextCfg.network.verify_tls
     detectedGamesYML = nextDetectedGamesYML
     cfg = nextCfg
   }
@@ -165,22 +169,36 @@
     return 'Choose a valid folder path'
   }
 
-  async function commitMaxConcurrent() {
-    if (!cfg || maxConcurrent === cfg.network.max_concurrent_downloads) return
-    if (maxConcurrent < 1 || maxConcurrent > 100) {
-      maxConcurrent = cfg.network.max_concurrent_downloads
+  async function commitParallelDownloads() {
+    if (!cfg || parallelDownloads === cfg.network.parallel_downloads) return
+    if (parallelDownloads < 1 || parallelDownloads > 100) {
+      parallelDownloads = cfg.network.parallel_downloads
       return
     }
-    await setNetwork('max_concurrent_downloads', maxConcurrent)
+    await setNetwork('parallel_downloads', parallelDownloads)
   }
 
-  async function commitRetryCount() {
-    if (!cfg || retryCount === cfg.network.retry_count) return
-    if (retryCount < 0 || retryCount > 20) {
-      retryCount = cfg.network.retry_count
+  async function commitRetries() {
+    if (!cfg || retries === cfg.network.retries) return
+    if (retries < 0 || retries > 20) {
+      retries = cfg.network.retries
       return
     }
-    await setNetwork('retry_count', retryCount)
+    await setNetwork('retries', retries)
+  }
+
+  async function commitTimeoutSeconds() {
+    if (!cfg || timeoutSeconds === cfg.network.timeout_seconds) return
+    if (timeoutSeconds < 1 || timeoutSeconds > 300) {
+      timeoutSeconds = cfg.network.timeout_seconds
+      return
+    }
+    await setNetwork('timeout_seconds', timeoutSeconds)
+  }
+
+  async function commitVerifyTLS() {
+    if (!cfg || verifyTLS === cfg.network.verify_tls) return
+    await setNetwork('verify_tls', verifyTLS)
   }
 
   const THEMES = [
@@ -262,33 +280,58 @@
         <h2 class="mb-2 text-sm font-medium text-fg">Network</h2>
         <div class="panel p-4">
           <div class="grid grid-cols-[13rem_12rem_1fr] items-start gap-x-4 gap-y-4 text-sm">
-            <label for="max-concurrent" class="pt-1 text-muted">Concurrent downloads</label>
+            <label for="parallel-downloads" class="pt-1 text-muted">Parallel downloads</label>
             <div>
               <input
-                id="max-concurrent"
+                id="parallel-downloads"
                 type="number"
                 min="1"
                 max="100"
-                bind:value={maxConcurrent}
-                onchange={commitMaxConcurrent}
+                bind:value={parallelDownloads}
+                onchange={commitParallelDownloads}
                 class="input w-full px-2 py-1 text-sm"
               />
             </div>
             <span></span>
 
-            <label for="retry-count" class="pt-1 text-muted">Retry count</label>
+            <label for="retries" class="pt-1 text-muted">Retries</label>
             <div>
               <input
-                id="retry-count"
+                id="retries"
                 type="number"
                 min="0"
                 max="20"
-                bind:value={retryCount}
-                onchange={commitRetryCount}
+                bind:value={retries}
+                onchange={commitRetries}
                 class="input w-full px-2 py-1 text-sm"
               />
             </div>
             <span></span>
+
+            <label for="timeout-seconds" class="pt-1 text-muted">Timeout seconds</label>
+            <div>
+              <input
+                id="timeout-seconds"
+                type="number"
+                min="1"
+                max="300"
+                bind:value={timeoutSeconds}
+                onchange={commitTimeoutSeconds}
+                class="input w-full px-2 py-1 text-sm"
+              />
+            </div>
+            <span class="pt-1 text-xs text-muted-soft">Connection and response-header timeout</span>
+
+            <label for="verify-tls" class="pt-1 text-muted">Verify TLS</label>
+            <div class="pt-1">
+              <input
+                id="verify-tls"
+                type="checkbox"
+                bind:checked={verifyTLS}
+                onchange={commitVerifyTLS}
+              />
+            </div>
+            <span class="pt-1 text-xs text-muted-soft">May fail with some Sony update endpoints</span>
           </div>
         </div>
       </section>

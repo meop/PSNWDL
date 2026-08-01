@@ -95,7 +95,7 @@ func TestEnqueue_HappyPath(t *testing.T) {
 
 	emitter := &recordingEmitter{}
 	act := activity.NewSink(emitter)
-	q := NewQueue(config.Network{MaxConcurrentDownloads: 1, VerifyTLS: true}, "", emitter, act)
+	q := NewQueue(config.Network{ParallelDownloads: 1, VerifyTLS: true}, "", emitter, act)
 
 	id, err := q.Enqueue(context.Background(), Request{
 		TitleID: "BCUS98114",
@@ -143,7 +143,7 @@ func TestEnqueue_SHA1Mismatch(t *testing.T) {
 
 	emitter := &recordingEmitter{}
 	act := activity.NewSink(emitter)
-	q := NewQueue(config.Network{MaxConcurrentDownloads: 1, VerifyTLS: true}, "", emitter, act)
+	q := NewQueue(config.Network{ParallelDownloads: 1, VerifyTLS: true}, "", emitter, act)
 
 	id, err := q.Enqueue(context.Background(), Request{
 		TitleID: "BCUS98114",
@@ -178,7 +178,7 @@ func TestEnqueue_PS4UsesFullFileSHA1(t *testing.T) {
 	defer server.Close()
 
 	act := activity.NewSink(NoopEmitter{})
-	q := NewQueue(config.Network{MaxConcurrentDownloads: 1, VerifyTLS: true}, "", NoopEmitter{}, act)
+	q := NewQueue(config.Network{ParallelDownloads: 1, VerifyTLS: true}, "", NoopEmitter{}, act)
 
 	id, err := q.Enqueue(context.Background(), Request{
 		TitleID: "CUSA00001",
@@ -209,7 +209,7 @@ func TestEnqueue_BadStatus(t *testing.T) {
 	defer server.Close()
 
 	act := activity.NewSink(NoopEmitter{})
-	q := NewQueue(config.Network{MaxConcurrentDownloads: 1, VerifyTLS: true}, "", NoopEmitter{}, act)
+	q := NewQueue(config.Network{ParallelDownloads: 1, VerifyTLS: true}, "", NoopEmitter{}, act)
 	id, err := q.Enqueue(context.Background(), Request{
 		TitleID: "BCUS98114",
 		Mode:    "ps3",
@@ -243,9 +243,9 @@ func TestEnqueue_DownloadCanOutliveRequestTimeout(t *testing.T) {
 
 	act := activity.NewSink(NoopEmitter{})
 	q := NewQueue(config.Network{
-		MaxConcurrentDownloads: 1,
-		VerifyTLS:              true,
-		RequestTimeoutSeconds:  1,
+		ParallelDownloads: 1,
+		TimeoutSeconds:    1,
+		VerifyTLS:         true,
 	}, "", NoopEmitter{}, act)
 
 	id, err := q.Enqueue(context.Background(), Request{

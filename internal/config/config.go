@@ -32,10 +32,10 @@ type Storage struct {
 }
 
 type Network struct {
-	MaxConcurrentDownloads int  `toml:"max_concurrent_downloads" json:"max_concurrent_downloads"`
-	VerifyTLS              bool `toml:"verify_tls"               json:"verify_tls"`
-	RequestTimeoutSeconds  int  `toml:"request_timeout_seconds"  json:"request_timeout_seconds"`
-	RetryCount             int  `toml:"retry_count"              json:"retry_count"`
+	ParallelDownloads int  `toml:"parallel_downloads" json:"parallel_downloads"`
+	Retries           int  `toml:"retries"            json:"retries"`
+	TimeoutSeconds    int  `toml:"timeout_seconds"     json:"timeout_seconds"`
+	VerifyTLS         bool `toml:"verify_tls"          json:"verify_tls"`
 }
 
 type UI struct {
@@ -55,10 +55,10 @@ func Default() *Config {
 			LibraryDir: libraryDir,
 		},
 		Network: Network{
-			MaxConcurrentDownloads: 5,
-			VerifyTLS:              false,
-			RequestTimeoutSeconds:  15,
-			RetryCount:             3,
+			ParallelDownloads: 5,
+			Retries:           3,
+			TimeoutSeconds:    15,
+			VerifyTLS:         false,
 		},
 		UI: UI{
 			Theme:           "system",

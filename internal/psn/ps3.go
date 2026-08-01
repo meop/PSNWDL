@@ -39,7 +39,7 @@ type Client struct {
 // validation is skipped — Sony's title-update hosts present certs the Go
 // default roots reject.
 func NewClient(net config.Network, act *activity.Sink) *Client {
-	timeout := time.Duration(net.RequestTimeoutSeconds) * time.Second
+	timeout := time.Duration(net.TimeoutSeconds) * time.Second
 	if timeout <= 0 {
 		timeout = 15 * time.Second
 	}

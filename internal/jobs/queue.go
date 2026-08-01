@@ -24,9 +24,9 @@ import (
 )
 
 const (
-	defaultMaxDownloads = 5
-	verifyPoolSize      = 4
-	progressInterval    = 250 * time.Millisecond
+	defaultParallelDownloads = 5
+	verifyPoolSize           = 4
+	progressInterval         = 250 * time.Millisecond
 	// PS3/PSVita PKGs store a SHA-1 digest in the final 32 bytes; the body
 	// hash excludes them. PS4/PS5 hash the whole file.
 	ps3TrailerBytes = 32
@@ -46,50 +46,50 @@ type Queue struct {
 	emitter    Emitter
 	activity   *activity.Sink
 	libraryDir string
-	retryCount int
+	retries    int
 	idSeq      atomic.Uint64
 }
 
 // NewQueue builds a queue. emitter may be NoopEmitter{} for headless use.
 func NewQueue(net config.Network, libraryDir string, emitter Emitter, act *activity.Sink) *Queue {
-	maxDL := normalizedMaxDownloads(net.MaxConcurrentDownloads)
-	retryCount := normalizedRetryCount(net.RetryCount)
+	parallelDownloads := normalizedParallelDownloads(net.ParallelDownloads)
+	retries := normalizedRetries(net.Retries)
 
 	return &Queue{
 		jobs:       make(map[string]*Job),
 		cancels:    make(map[string]context.CancelFunc),
 		pauses:     make(map[string]chan struct{}),
-		downloads:  newDownloadLimiter(maxDL),
+		downloads:  newDownloadLimiter(parallelDownloads),
 		verifySem:  make(chan struct{}, verifyPoolSize),
 		http:       newHTTPClient(net),
 		emitter:    emitter,
 		activity:   act,
 		libraryDir: libraryDir,
-		retryCount: retryCount,
+		retries:    retries,
 	}
 }
 
-func normalizedMaxDownloads(maxDL int) int {
-	if maxDL <= 0 {
-		return defaultMaxDownloads
+func normalizedParallelDownloads(parallelDownloads int) int {
+	if parallelDownloads <= 0 {
+		return defaultParallelDownloads
 	}
-	return maxDL
+	return parallelDownloads
 }
 
-func normalizedRetryCount(retryCount int) int {
-	if retryCount < 0 {
+func normalizedRetries(retries int) int {
+	if retries < 0 {
 		return 0
 	}
-	return retryCount
+	return retries
 }
 
 func newHTTPClient(network config.Network) *http.Client {
-	timeout := time.Duration(network.RequestTimeoutSeconds) * time.Second
+	timeout := time.Duration(network.TimeoutSeconds) * time.Second
 	if timeout <= 0 {
 		timeout = 15 * time.Second
 	}
 
-	// RequestTimeoutSeconds limits connection setup and response headers, not
+	// TimeoutSeconds limits connection setup and response headers, not
 	// the complete response body. Firmware and game packages can take hours to
 	// download; http.Client.Timeout would abort every transfer once this short
 	// request timeout elapsed. The request context still provides cancellation.
@@ -112,11 +112,11 @@ func (q *Queue) SetLibraryDir(libraryDir string) {
 }
 
 func (q *Queue) SetNetwork(net config.Network) {
-	q.downloads.SetLimit(normalizedMaxDownloads(net.MaxConcurrentDownloads))
+	q.downloads.SetLimit(normalizedParallelDownloads(net.ParallelDownloads))
 
 	q.mu.Lock()
 	q.http = newHTTPClient(net)
-	q.retryCount = normalizedRetryCount(net.RetryCount)
+	q.retries = normalizedRetries(net.Retries)
 	q.mu.Unlock()
 }
 
@@ -126,10 +126,10 @@ func (q *Queue) httpClient() *http.Client {
 	return q.http
 }
 
-func (q *Queue) retries() int {
+func (q *Queue) retryLimit() int {
 	q.mu.Lock()
 	defer q.mu.Unlock()
-	return q.retryCount
+	return q.retries
 }
 
 func (q *Queue) nextID() string {
@@ -175,7 +175,7 @@ func (q *Queue) Enqueue(parent context.Context, req Request) (string, error) {
 		State:     StateQueued,
 		Attempt:   1,
 	}
-	j.MaxAttempts = q.retries() + 1
+	j.MaxAttempts = q.retryLimit() + 1
 
 	q.mu.Lock()
 	for _, existing := range q.jobs {
@@ -320,7 +320,7 @@ func (q *Queue) run(parent context.Context, j *Job) {
 		q.mu.Unlock()
 	}()
 
-	maxAttempts := q.retries() + 1
+	maxAttempts := q.retryLimit() + 1
 	if maxAttempts < 1 {
 		maxAttempts = 1
 	}
@@ -495,7 +495,7 @@ type downloadLimiter struct {
 
 func newDownloadLimiter(limit int) *downloadLimiter {
 	if limit <= 0 {
-		limit = defaultMaxDownloads
+		limit = defaultParallelDownloads
 	}
 	return &downloadLimiter{
 		limit:   limit,
@@ -533,7 +533,7 @@ func (l *downloadLimiter) Release() {
 
 func (l *downloadLimiter) SetLimit(limit int) {
 	if limit <= 0 {
-		limit = defaultMaxDownloads
+		limit = defaultParallelDownloads
 	}
 	l.mu.Lock()
 	l.limit = limit

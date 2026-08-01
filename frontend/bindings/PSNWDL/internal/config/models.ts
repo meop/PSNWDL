@@ -65,24 +65,24 @@ export class Config {
 }
 
 export class Network {
-    "max_concurrent_downloads": number;
+    "parallel_downloads": number;
+    "retries": number;
+    "timeout_seconds": number;
     "verify_tls": boolean;
-    "request_timeout_seconds": number;
-    "retry_count": number;
 
     /** Creates a new Network instance. */
     constructor($$source: Partial<Network> = {}) {
-        if (!("max_concurrent_downloads" in $$source)) {
-            this["max_concurrent_downloads"] = 0;
+        if (!("parallel_downloads" in $$source)) {
+            this["parallel_downloads"] = 0;
+        }
+        if (!("retries" in $$source)) {
+            this["retries"] = 0;
+        }
+        if (!("timeout_seconds" in $$source)) {
+            this["timeout_seconds"] = 0;
         }
         if (!("verify_tls" in $$source)) {
             this["verify_tls"] = false;
-        }
-        if (!("request_timeout_seconds" in $$source)) {
-            this["request_timeout_seconds"] = 0;
-        }
-        if (!("retry_count" in $$source)) {
-            this["retry_count"] = 0;
         }
 
         Object.assign(this, $$source);

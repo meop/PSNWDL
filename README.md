@@ -162,10 +162,10 @@ hdd0_game = ""     # absolute path to RPCS3/dev_hdd0/game (for PS3 install)
 library_dir = "/home/you/.psnwdl/library"  # base folder for downloaded files
 
 [network]
-max_concurrent_downloads = 5
+parallel_downloads = 5
+retries = 3
+timeout_seconds = 15 # metadata requests and download connection/header timeout
 verify_tls = false
-request_timeout_seconds = 15 # metadata requests and download connection/header timeout
-retry_count = 3
 
 [ui]
 theme = "system"            # system | dark | light
@@ -180,9 +180,8 @@ next Settings save. RPCS3 paths selected in Settings must point to an existing
 `games.yml` file and an existing `dev_hdd0/game` directory.
 
 `home_dir` is exposed to the UI (resolved at runtime) but never persisted.
-`verify_tls` is kept in the config file for advanced diagnostics; the Settings
-UI leaves it off because several Sony endpoints use certificates that fail
-normal desktop validation.
+TLS verification defaults off because several Sony endpoints use certificates
+that fail normal desktop validation.
 
 ### Cache layout
 

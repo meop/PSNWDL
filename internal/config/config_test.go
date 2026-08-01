@@ -9,11 +9,11 @@ import (
 
 func TestDefaultNetworkSettings(t *testing.T) {
 	cfg := Default()
-	if cfg.Network.MaxConcurrentDownloads != 5 {
-		t.Errorf("max concurrent downloads = %d, want 5", cfg.Network.MaxConcurrentDownloads)
+	if cfg.Network.ParallelDownloads != 5 {
+		t.Errorf("parallel downloads = %d, want 5", cfg.Network.ParallelDownloads)
 	}
-	if cfg.Network.RetryCount != 3 {
-		t.Errorf("retry count = %d, want 3", cfg.Network.RetryCount)
+	if cfg.Network.Retries != 3 {
+		t.Errorf("retries = %d, want 3", cfg.Network.Retries)
 	}
 }
 
@@ -33,9 +33,10 @@ func TestLoadWritesFullDefaultConfigWhenMissing(t *testing.T) {
 		"hdd0_game = ''",
 		"[storage]",
 		"[network]",
-		"max_concurrent_downloads = 5",
-		"request_timeout_seconds = 15",
-		"retry_count = 3",
+		"parallel_downloads = 5",
+		"retries = 3",
+		"timeout_seconds = 15",
+		"verify_tls = false",
 		"[ui]",
 		"default_mode = 'ps3'",
 		"default_download = 'firmware'",
@@ -43,5 +44,20 @@ func TestLoadWritesFullDefaultConfigWhenMissing(t *testing.T) {
 		if !strings.Contains(text, expected) {
 			t.Errorf("generated config missing %q:\n%s", expected, text)
 		}
+	}
+
+	networkFields := []string{
+		"parallel_downloads = 5",
+		"retries = 3",
+		"timeout_seconds = 15",
+		"verify_tls = false",
+	}
+	previous := -1
+	for _, field := range networkFields {
+		index := strings.Index(text, field)
+		if index <= previous {
+			t.Errorf("network field %q is not in alphabetical order:\n%s", field, text)
+		}
+		previous = index
 	}
 }
