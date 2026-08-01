@@ -137,3 +137,19 @@ func (s *Sink) Clear() {
 	defer s.mu.Unlock()
 	s.entries = s.entries[:0]
 }
+
+func (s *Sink) ClearScope(scope string) {
+	if scope == "" || scope == "all" {
+		s.Clear()
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	kept := s.entries[:0]
+	for _, entry := range s.entries {
+		if entry.Scope != scope {
+			kept = append(kept, entry)
+		}
+	}
+	s.entries = kept
+}

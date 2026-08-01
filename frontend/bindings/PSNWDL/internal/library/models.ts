@@ -5,23 +5,18 @@
 // @ts-ignore: Unused imports
 import { Create as $Create } from "@wailsio/runtime";
 
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-ignore: Unused imports
-import * as psn$0 from "../psn/models.js";
-
 /**
- * Row is a per-title reconciled view of "library has it" + "server says X" +
- * "cache has Y", with a derived Status the frontend can colour-code.
+ * Row describes how completely one RPCS3 title's server update set exists in
+ * the download library. Installation state is deliberately not part of this
+ * view; the Emulator pane owns synchronization, while Library owns stored files.
  */
 export class Row {
     "title_id": string;
     "name"?: string;
     "install_dir": string;
     "status": Status;
-    "installed_version"?: string;
-    "latest_local"?: string;
-    "latest_server"?: string;
-    "updates"?: psn$0.Update[];
+    "downloaded_count": number;
+    "update_count": number;
     "error"?: string;
 
     /** Creates a new Row instance. */
@@ -35,6 +30,12 @@ export class Row {
         if (!("status" in $$source)) {
             this["status"] = Status.$zero;
         }
+        if (!("downloaded_count" in $$source)) {
+            this["downloaded_count"] = 0;
+        }
+        if (!("update_count" in $$source)) {
+            this["update_count"] = 0;
+        }
 
         Object.assign(this, $$source);
     }
@@ -43,11 +44,7 @@ export class Row {
      * Creates a new Row instance from a string or object.
      */
     static createFrom($$source: any = {}): Row {
-        const $$createField7_0 = $$createType1;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
-        if ("updates" in $$parsedSource) {
-            $$parsedSource["updates"] = $$createField7_0($$parsedSource["updates"]);
-        }
         return new Row($$parsedSource as Partial<Row>);
     }
 }
@@ -58,14 +55,9 @@ export enum Status {
      */
     $zero = "",
 
-    StatusUpToDate = "up_to_date",
-    StatusUpdateAvailable = "update_available",
-    StatusMissingAll = "missing_all",
+    StatusNoneDownloaded = "none_downloaded",
+    StatusSomeDownloaded = "some_downloaded",
+    StatusAllDownloaded = "all_downloaded",
     StatusNoUpdates = "no_updates",
     StatusUnreachable = "unreachable",
-    StatusCachedNotInstalled = "cached_not_installed",
 };
-
-// Private type creation functions
-const $$createType0 = psn$0.Update.createFrom;
-const $$createType1 = $Create.Array($$createType0);

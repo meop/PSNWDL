@@ -49,19 +49,16 @@ export function ClearActivityLog(): $CancellablePromise<void> {
     return $Call.ByID(2022669751);
 }
 
+export function ClearActivityLogScope(scope: string): $CancellablePromise<void> {
+    return $Call.ByID(3747848757, scope);
+}
+
 export function ConfigFilePath(): $CancellablePromise<string> {
     return $Call.ByID(1273835914);
 }
 
 export function DeleteLibraryItems(paths: string[]): $CancellablePromise<void> {
     return $Call.ByID(73741487, paths);
-}
-
-/**
- * DeleteTitleCachePS3 removes all downloaded updates for one PS3 title.
- */
-export function DeleteTitleCachePS3(tid: string): $CancellablePromise<void> {
-    return $Call.ByID(619880728, tid);
 }
 
 export function EnqueueDownload(req: jobs$0.Request): $CancellablePromise<string> {
@@ -135,13 +132,6 @@ export function OpenFolder(path: string): $CancellablePromise<void> {
     return $Call.ByID(3894305329, path);
 }
 
-/**
- * OpenTitleCachePS3 opens one PS3 title's downloaded-update folder.
- */
-export function OpenTitleCachePS3(tid: string): $CancellablePromise<void> {
-    return $Call.ByID(3379642157, tid);
-}
-
 export function PauseJob(id: string): $CancellablePromise<void> {
     return $Call.ByID(1505341468, id);
 }
@@ -155,8 +145,8 @@ export function PickGamesYML(defaultDirectory: string): $CancellablePromise<stri
 }
 
 /**
- * ReconcileLibraryPS3 enriches each RPCS3 library entry with server +
- * local-cache state, producing per-title status badges.
+ * ReconcileLibraryPS3 compares every server package for each RPCS3 title with
+ * the exact files present in the download library.
  */
 export function ReconcileLibraryPS3(): $CancellablePromise<library$0.Row[]> {
     return $Call.ByID(2934308500).then(($result: any) => {
@@ -198,17 +188,22 @@ export function SearchVita(tid: string): $CancellablePromise<psn$0.Title | null>
 }
 
 /**
- * SyncTitlePS3 enqueues only the missing updates for a single title.
+ * SyncAllPS3 removes title folders not represented in RPCS3, then exactly
+ * synchronizes every RPCS3 title against the server.
  */
-export function SyncTitlePS3(tid: string): $CancellablePromise<string[]> {
-    return $Call.ByID(2047523786, tid).then(($result: any) => {
+export function SyncAllPS3(): $CancellablePromise<string[]> {
+    return $Call.ByID(2563320289).then(($result: any) => {
         return $$createType15($result);
     });
 }
 
-export function UpdateDownloadLibrary(): $CancellablePromise<downloads$0.Title[]> {
-    return $Call.ByID(3026126543).then(($result: any) => {
-        return $$createType4($result);
+/**
+ * SyncTitlePS3 makes one RPCS3 title folder exactly match the packages
+ * advertised by the server: extras are removed and missing packages queued.
+ */
+export function SyncTitlePS3(tid: string): $CancellablePromise<string[]> {
+    return $Call.ByID(2047523786, tid).then(($result: any) => {
+        return $$createType15($result);
     });
 }
 

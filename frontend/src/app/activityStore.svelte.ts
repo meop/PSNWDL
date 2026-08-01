@@ -1,5 +1,5 @@
 import { derived, writable } from 'svelte/store'
-import { ActivityLog, ClearActivityLog } from '../../bindings/PSNWDL/app'
+import { ActivityLog, ClearActivityLog, ClearActivityLogScope } from '../../bindings/PSNWDL/app'
 import { Events } from '@wailsio/runtime'
 import type * as activity from '../../bindings/PSNWDL/internal/activity'
 
@@ -21,9 +21,14 @@ export function wireActivityEvents(): void {
   })
 }
 
-export async function clearActivityLog(): Promise<void> {
-  await ClearActivityLog()
-  activityEntries.set([])
+export async function clearActivityLog(scope = 'all'): Promise<void> {
+  if (scope === 'all') {
+    await ClearActivityLog()
+    activityEntries.set([])
+    return
+  }
+  await ClearActivityLogScope(scope)
+  activityEntries.update((entries) => entries.filter((entry) => entry.scope !== scope))
 }
 
 export const latestActivity = derived(activityEntries, ($entries) =>

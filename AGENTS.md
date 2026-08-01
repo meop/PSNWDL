@@ -86,7 +86,7 @@ module root to regenerate the TS models/bindings, then rebuild.
 9. **The four workbench panes refresh independently.** Download search refreshes
    only its results; Emulator reconciliation runs only on initial load, explicit
    refresh, relevant settings changes, installation changes, or after the jobs
-   started by an Emulator download action reach terminal state. Every completed
+   started by an Emulator sync action reach terminal state. Every completed
    job refreshes Library, but Download-pane jobs must not otherwise refresh
    Emulator. Do not reintroduce periodic reconciliation or make unrelated cache
    changes fan out into RPCS3 parsing and PSN requests.
@@ -99,15 +99,20 @@ module root to regenerate the TS models/bindings, then rebuild.
 
 11. **Library storage has explicit content branches.** The default root is
     `~/.psnwdl/library`; files live under `<mode>/firmware/<locale>/` or
-    `<mode>/title/<TitleID>/`. Schema-v1 libraries are migrated by
-    `config.MigrateLibraryLayout`. Keep download destinations, scanning,
-    reconciliation, Emulator cache actions, and documentation on this layout.
+    `<mode>/title/<TitleID>/`. Keep download destinations, scanning,
+    synchronization, Library actions, and documentation on this layout. The app
+    is unreleased, so do not add schema migrations or legacy-layout handling.
 
 12. **Download results keep Library matches visible but disabled.** Matching is
     local and reactive against the downloaded-library store: completion makes
     the matching row non-interactive and deletion enables it again when that
     firmware/title result is currently loaded. Do not turn Library changes into
     fresh PSN searches.
+
+13. **Emulator sync is exact.** Per-title Sync removes unexpected files and
+    queues every missing server-advertised package. Sync all also removes PS3
+    title folders not represented in RPCS3. Never reduce this to a
+    highest-version comparison; gaps between versions must remain detectable.
 
 ---
 

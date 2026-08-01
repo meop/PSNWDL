@@ -25,7 +25,6 @@
   let hdd0Input = $state('')
   let hdd0Error = $state('')
   let maxConcurrent = $state(5)
-  let timeout = $state(15)
   let retryCount = $state(3)
 
   onMount(async () => {
@@ -47,7 +46,6 @@
     hdd0Input = nextCfg.rpcs3.hdd0_game
     hdd0Error = ''
     maxConcurrent = nextCfg.network.max_concurrent_downloads
-    timeout = nextCfg.network.request_timeout_seconds
     retryCount = nextCfg.network.retry_count
     detectedGamesYML = nextDetectedGamesYML
     cfg = nextCfg
@@ -175,15 +173,6 @@
     await setNetwork('max_concurrent_downloads', maxConcurrent)
   }
 
-  async function commitTimeout() {
-    if (!cfg || timeout === cfg.network.request_timeout_seconds) return
-    if (timeout < 1 || timeout > 300) {
-      timeout = cfg.network.request_timeout_seconds
-      return
-    }
-    await setNetwork('request_timeout_seconds', timeout)
-  }
-
   async function commitRetryCount() {
     if (!cfg || retryCount === cfg.network.retry_count) return
     if (retryCount < 0 || retryCount > 20) {
@@ -285,20 +274,6 @@
               />
             </div>
             <span></span>
-
-            <label for="timeout" class="pt-1 text-muted">Connection timeout seconds</label>
-            <div>
-              <input
-                id="timeout"
-                type="number"
-                min="1"
-                max="300"
-                bind:value={timeout}
-                onchange={commitTimeout}
-                class="input w-full px-2 py-1 text-sm"
-              />
-            </div>
-            <span class="pt-1 text-muted-soft">Applies to connection setup and response headers, not total download time.</span>
 
             <label for="retry-count" class="pt-1 text-muted">Retry count</label>
             <div>

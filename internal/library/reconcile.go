@@ -2,13 +2,13 @@ package library
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	stdsync "sync"
 
 	"PSNWDL/internal/config"
-	"PSNWDL/internal/pkg"
 	"PSNWDL/internal/psn"
 	"PSNWDL/internal/rpcs3"
 )
@@ -18,129 +18,41 @@ const reconcileConcurrency = 6
 type Status string
 
 const (
-	StatusUpToDate           Status = "up_to_date"
-	StatusUpdateAvailable    Status = "update_available"
-	StatusMissingAll         Status = "missing_all"
-	StatusNoUpdates          Status = "no_updates"
-	StatusUnreachable        Status = "unreachable"
-	StatusCachedNotInstalled Status = "cached_not_installed"
+	StatusNoneDownloaded Status = "none_downloaded"
+	StatusSomeDownloaded Status = "some_downloaded"
+	StatusAllDownloaded  Status = "all_downloaded"
+	StatusNoUpdates      Status = "no_updates"
+	StatusUnreachable    Status = "unreachable"
 )
 
-// Row is a per-title reconciled view of "library has it" + "server says X" +
-// "cache has Y", with a derived Status the frontend can colour-code.
+// Row describes how completely one RPCS3 title's server update set exists in
+// the download library. Installation state is deliberately not part of this
+// view; the Emulator pane owns synchronization, while Library owns stored files.
 type Row struct {
-	TitleID          string       `json:"title_id"`
-	Name             string       `json:"name,omitempty"`
-	InstallDir       string       `json:"install_dir"`
-	Status           Status       `json:"status"`
-	InstalledVersion string       `json:"installed_version,omitempty"`
-	LatestLocal      string       `json:"latest_local,omitempty"`
-	LatestServer     string       `json:"latest_server,omitempty"`
-	Updates          []psn.Update `json:"updates,omitempty"`
-	Error            string       `json:"error,omitempty"`
+	TitleID         string `json:"title_id"`
+	Name            string `json:"name,omitempty"`
+	InstallDir      string `json:"install_dir"`
+	Status          Status `json:"status"`
+	DownloadedCount int    `json:"downloaded_count"`
+	UpdateCount     int    `json:"update_count"`
+	Error           string `json:"error,omitempty"`
 }
 
-// PSNLookup is the subset of psn.Client used by reconciliation. Defined as
-// an interface so tests can inject a fake.
+// SyncPlan is the exact difference between the server-advertised package set
+// and one local title folder.
+type SyncPlan struct {
+	Missing         []psn.Update
+	Extras          []string
+	DownloadedCount int
+	UpdateCount     int
+}
+
+// PSNLookup is the subset of psn.Client used by reconciliation.
 type PSNLookup interface {
 	LookupPS3(ctx context.Context, tid string) (*psn.Title, error)
 }
 
-type InstalledVersionCache struct {
-	mu       stdsync.Mutex
-	versions map[string]versionCacheEntry
-}
-
-type versionCacheEntry struct {
-	version string
-	mtime   int64
-	size    int64
-}
-
-var installedVersionCache = &InstalledVersionCache{
-	versions: make(map[string]versionCacheEntry),
-}
-
-func (c *InstalledVersionCache) Get(hdd0Game, titleID string) string {
-	if hdd0Game == "" || titleID == "" {
-		return ""
-	}
-
-	dir := filepath.Join(hdd0Game, titleID)
-	sfoPath := filepath.Join(dir, "PARAM.SFO")
-	info, err := os.Stat(sfoPath)
-	if err != nil {
-		return ""
-	}
-
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	key := filepath.Clean(sfoPath)
-	entry, exists := c.versions[key]
-	if exists && entry.mtime == info.ModTime().UnixNano() && entry.size == info.Size() {
-		return entry.version
-	}
-
-	version := readInstalledVersion(dir)
-	c.versions[key] = versionCacheEntry{
-		version: version,
-		mtime:   info.ModTime().UnixNano(),
-		size:    info.Size(),
-	}
-	return version
-}
-
-func readInstalledVersion(titleDir string) string {
-	sfoPath := filepath.Join(titleDir, "PARAM.SFO")
-	data, err := os.ReadFile(sfoPath)
-	if err != nil {
-		return ""
-	}
-
-	info, err := pkg.ParseSFO(data)
-	if err != nil {
-		return ""
-	}
-
-	if info.AppVer == "" {
-		return ""
-	}
-
-	return strings.TrimPrefix(info.AppVer, "01.")
-}
-
-func (c *InstalledVersionCache) Invalidate(titleID string) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	for path := range c.versions {
-		if filepath.Base(filepath.Dir(path)) == titleID {
-			delete(c.versions, path)
-		}
-	}
-}
-
-func InvalidateInstalledVersionCache(titleID string) {
-	installedVersionCache.Invalidate(titleID)
-}
-
-func ClearInstalledVersionCache() {
-	installedVersionCache.mu.Lock()
-	defer installedVersionCache.mu.Unlock()
-	clear(installedVersionCache.versions)
-}
-
-// ReconcilePS3 computes a Row per RPCS3 library entry by combining the local
-// cached PKG versions with the server's *-ver.xml answer.
-func ReconcilePS3(ctx context.Context, entries []rpcs3.Entry, client PSNLookup) []Row {
-	return ReconcilePS3WithHDD0(ctx, entries, client, "")
-}
-
-func ReconcilePS3WithHDD0(ctx context.Context, entries []rpcs3.Entry, client PSNLookup, hdd0Game string) []Row {
-	return ReconcilePS3WithPaths(ctx, entries, client, hdd0Game, "")
-}
-
-func ReconcilePS3WithPaths(ctx context.Context, entries []rpcs3.Entry, client PSNLookup, hdd0Game, libraryRoot string) []Row {
+func ReconcilePS3(ctx context.Context, entries []rpcs3.Entry, client PSNLookup, libraryRoot string) []Row {
 	if len(entries) == 0 {
 		return []Row{}
 	}
@@ -149,142 +61,140 @@ func ReconcilePS3WithPaths(ctx context.Context, entries []rpcs3.Entry, client PS
 	sem := make(chan struct{}, reconcileConcurrency)
 	var wg stdsync.WaitGroup
 
-	for i, e := range entries {
+	for i, entry := range entries {
 		wg.Add(1)
 		sem <- struct{}{}
-		go func(i int, e rpcs3.Entry) {
+		go func(i int, entry rpcs3.Entry) {
 			defer wg.Done()
 			defer func() { <-sem }()
-			rows[i] = reconcileOne(ctx, e, client, hdd0Game, libraryRoot)
-		}(i, e)
+			rows[i] = reconcileOne(ctx, entry, client, libraryRoot)
+		}(i, entry)
 	}
 	wg.Wait()
 	return rows
 }
 
-func reconcileOne(ctx context.Context, e rpcs3.Entry, client PSNLookup, hdd0Game, libraryRoot string) Row {
-	row := Row{
-		TitleID:    e.TitleID,
-		InstallDir: e.InstallDir,
-	}
-
-	installedVersion := installedVersionCache.Get(hdd0Game, e.TitleID)
-	if installedVersion != "" {
-		row.InstalledVersion = installedVersion
-	}
-
-	localVer, _ := HighestCachedVersionIn(libraryRoot, "ps3", e.TitleID)
-	row.LatestLocal = localVer
-
-	title, err := client.LookupPS3(ctx, e.TitleID)
+func reconcileOne(ctx context.Context, entry rpcs3.Entry, client PSNLookup, libraryRoot string) Row {
+	row := Row{TitleID: entry.TitleID, InstallDir: entry.InstallDir}
+	title, err := client.LookupPS3(ctx, entry.TitleID)
 	if err != nil {
 		row.Status = StatusUnreachable
 		row.Error = err.Error()
 		return row
 	}
-	row.Name = title.Name
-	row.Updates = title.Updates
 
-	if len(title.Updates) == 0 {
-		row.Status = StatusNoUpdates
+	row.Name = title.Name
+	plan, err := PlanTitleSync(libraryRoot, "ps3", entry.TitleID, title.Updates)
+	if err != nil {
+		row.Status = StatusUnreachable
+		row.Error = err.Error()
 		return row
 	}
-
-	serverVer := highestServerVersion(title.Updates)
-	row.LatestServer = serverVer
-
-	row.Status = statusForVersions(installedVersion, localVer, serverVer, hdd0Game != "")
+	row.DownloadedCount = plan.DownloadedCount
+	row.UpdateCount = plan.UpdateCount
+	row.Status = statusForCounts(plan.DownloadedCount, plan.UpdateCount)
 	return row
 }
 
-func statusForVersions(installedVersion, localVersion, serverVersion string, hasInstallPath bool) Status {
-	if !hasInstallPath {
-		switch {
-		case localVersion == "":
-			return StatusMissingAll
-		case compareVersion(localVersion, serverVersion) >= 0:
-			return StatusUpToDate
-		default:
-			return StatusUpdateAvailable
-		}
-	}
-
+func statusForCounts(downloaded, total int) Status {
 	switch {
-	case installedVersion != "" && compareVersion(installedVersion, serverVersion) >= 0:
-		return StatusUpToDate
-	case localVersion != "" && compareVersion(localVersion, serverVersion) >= 0:
-		return StatusCachedNotInstalled
-	case installedVersion == "" && localVersion == "":
-		return StatusMissingAll
+	case total == 0:
+		return StatusNoUpdates
+	case downloaded == 0:
+		return StatusNoneDownloaded
+	case downloaded < total:
+		return StatusSomeDownloaded
 	default:
-		return StatusUpdateAvailable
+		return StatusAllDownloaded
 	}
 }
 
-// HighestCachedVersion scans ~/.psnwdl/library/<mode>/title/<TID>/ for files named
-// <TID>_<version>.pkg and returns the lexically-highest version, or "".
-func HighestCachedVersion(mode, tid string) (string, error) {
-	return HighestCachedVersionIn("", mode, tid)
-}
-
-func HighestCachedVersionIn(libraryRoot, mode, tid string) (string, error) {
-	dir, err := config.TitleDirForRoot(libraryRoot, mode)
+// PlanTitleSync compares exact expected filenames. A high-version file does
+// not hide a missing lower update, and unexpected files/directories are
+// returned for deletion by the caller.
+func PlanTitleSync(libraryRoot, mode, titleID string, updates []psn.Update) (SyncPlan, error) {
+	titleRoot, err := config.TitleDirForRoot(libraryRoot, mode)
 	if err != nil {
-		return "", err
+		return SyncPlan{}, err
 	}
-	titleDir := filepath.Join(dir, tid)
-	entries, err := os.ReadDir(titleDir)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return "", nil
-		}
-		return "", err
-	}
+	titleDir := filepath.Join(titleRoot, titleID)
 
-	prefix := tid + "_"
-	var best string
-	for _, e := range entries {
-		name := e.Name()
-		if !strings.HasPrefix(name, prefix) || !strings.HasSuffix(name, ".pkg") {
+	expected := make(map[string]psn.Update, len(updates))
+	order := make([]string, 0, len(updates))
+	for _, update := range updates {
+		name := expectedPackageName(titleID, update.Version)
+		if _, exists := expected[name]; exists {
 			continue
 		}
-		v := strings.TrimSuffix(strings.TrimPrefix(name, prefix), ".pkg")
-		if compareVersion(v, best) > 0 {
-			best = v
+		expected[name] = update
+		order = append(order, name)
+	}
+
+	plan := SyncPlan{UpdateCount: len(expected)}
+	present := make(map[string]bool, len(expected))
+	entries, err := os.ReadDir(titleDir)
+	if err != nil && !os.IsNotExist(err) {
+		return SyncPlan{}, fmt.Errorf("read title library %s: %w", titleDir, err)
+	}
+	for _, entry := range entries {
+		name := entry.Name()
+		if update, exists := expected[name]; exists && !entry.IsDir() {
+			info, infoErr := entry.Info()
+			if infoErr != nil {
+				return SyncPlan{}, fmt.Errorf("inspect title package %s: %w", filepath.Join(titleDir, name), infoErr)
+			}
+			if update.Size <= 0 || info.Size() == update.Size {
+				present[name] = true
+				continue
+			}
+		}
+		plan.Extras = append(plan.Extras, filepath.Join(titleDir, name))
+	}
+
+	for _, name := range order {
+		if present[name] {
+			plan.DownloadedCount++
+			continue
+		}
+		plan.Missing = append(plan.Missing, expected[name])
+	}
+	return plan, nil
+}
+
+func ExtraTitleFolders(libraryRoot, mode string, allowedTitleIDs []string) ([]string, error) {
+	titleRoot, err := config.TitleDirForRoot(libraryRoot, mode)
+	if err != nil {
+		return nil, err
+	}
+	entries, err := os.ReadDir(titleRoot)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return []string{}, nil
+		}
+		return nil, fmt.Errorf("read title library %s: %w", titleRoot, err)
+	}
+	allowed := make(map[string]struct{}, len(allowedTitleIDs))
+	for _, titleID := range allowedTitleIDs {
+		allowed[titleID] = struct{}{}
+	}
+	extras := []string{}
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		if _, keep := allowed[entry.Name()]; !keep {
+			extras = append(extras, filepath.Join(titleRoot, entry.Name()))
 		}
 	}
-	return best, nil
+	return extras, nil
 }
 
-func highestCachedVersion(mode, tid string) (string, error) {
-	return HighestCachedVersion(mode, tid)
-}
-
-func highestServerVersion(updates []psn.Update) string {
-	var best string
-	for _, u := range updates {
-		if compareVersion(u.Version, best) > 0 {
-			best = u.Version
+func expectedPackageName(titleID, version string) string {
+	version = strings.Map(func(r rune) rune {
+		if r < 0x20 || strings.ContainsRune(`\\/:*?"<>|`, r) {
+			return '_'
 		}
-	}
-	return best
-}
-
-// CompareVersion does a string compare which is correct for Sony's zero-padded
-// NN.NN format (e.g. "01.05" < "01.13" < "02.00").
-func CompareVersion(a, b string) int {
-	return compareVersion(a, b)
-}
-
-func compareVersion(a, b string) int {
-	switch {
-	case a == b:
-		return 0
-	case a == "":
-		return -1
-	case b == "":
-		return 1
-	default:
-		return strings.Compare(a, b)
-	}
+		return r
+	}, version)
+	return fmt.Sprintf("%s_%s.pkg", titleID, version)
 }

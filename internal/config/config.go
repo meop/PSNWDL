@@ -1,7 +1,6 @@
 package config
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -11,14 +10,11 @@ import (
 	"github.com/pelletier/go-toml/v2"
 )
 
-const SchemaVersion = 3
-
 type Config struct {
-	SchemaVersion int     `toml:"schema_version" json:"schema_version"`
-	RPCS3         RPCS3   `toml:"rpcs3"          json:"rpcs3"`
-	Storage       Storage `toml:"storage"        json:"storage"`
-	Network       Network `toml:"network"        json:"network"`
-	UI            UI      `toml:"ui"             json:"ui"`
+	RPCS3   RPCS3   `toml:"rpcs3"   json:"rpcs3"`
+	Storage Storage `toml:"storage" json:"storage"`
+	Network Network `toml:"network" json:"network"`
+	UI      UI      `toml:"ui"      json:"ui"`
 
 	// HomeDir is not stored in config.toml; it is populated in-memory at load
 	// so the UI can show resolved absolute paths (e.g. C:\Users\you\.psnwdl\…)
@@ -55,7 +51,6 @@ func Default() *Config {
 		libraryDir = defaultLibraryDir
 	}
 	return &Config{
-		SchemaVersion: SchemaVersion,
 		Storage: Storage{
 			LibraryDir: libraryDir,
 		},
@@ -92,12 +87,6 @@ func Load(path string) (*Config, error) {
 	cfg := Default()
 	if err := toml.Unmarshal(data, cfg); err != nil {
 		return nil, fmt.Errorf("parse config: %w", err)
-	}
-	if !bytes.Contains(data, []byte("retry_count")) {
-		cfg.Network.RetryCount = Default().Network.RetryCount
-	}
-	if !bytes.Contains(data, []byte("default_download")) {
-		cfg.UI.DefaultDownload = Default().UI.DefaultDownload
 	}
 	if cfg.HomeDir == "" {
 		cfg.HomeDir, _ = os.UserHomeDir()

@@ -6,7 +6,6 @@
 import { Create as $Create } from "@wailsio/runtime";
 
 export class Config {
-    "schema_version": number;
     "rpcs3": RPCS3;
     "storage": Storage;
     "network": Network;
@@ -21,9 +20,6 @@ export class Config {
 
     /** Creates a new Config instance. */
     constructor($$source: Partial<Config> = {}) {
-        if (!("schema_version" in $$source)) {
-            this["schema_version"] = 0;
-        }
         if (!("rpcs3" in $$source)) {
             this["rpcs3"] = (new RPCS3());
         }
@@ -47,22 +43,22 @@ export class Config {
      * Creates a new Config instance from a string or object.
      */
     static createFrom($$source: any = {}): Config {
-        const $$createField1_0 = $$createType0;
-        const $$createField2_0 = $$createType1;
-        const $$createField3_0 = $$createType2;
-        const $$createField4_0 = $$createType3;
+        const $$createField0_0 = $$createType0;
+        const $$createField1_0 = $$createType1;
+        const $$createField2_0 = $$createType2;
+        const $$createField3_0 = $$createType3;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("rpcs3" in $$parsedSource) {
-            $$parsedSource["rpcs3"] = $$createField1_0($$parsedSource["rpcs3"]);
+            $$parsedSource["rpcs3"] = $$createField0_0($$parsedSource["rpcs3"]);
         }
         if ("storage" in $$parsedSource) {
-            $$parsedSource["storage"] = $$createField2_0($$parsedSource["storage"]);
+            $$parsedSource["storage"] = $$createField1_0($$parsedSource["storage"]);
         }
         if ("network" in $$parsedSource) {
-            $$parsedSource["network"] = $$createField3_0($$parsedSource["network"]);
+            $$parsedSource["network"] = $$createField2_0($$parsedSource["network"]);
         }
         if ("ui" in $$parsedSource) {
-            $$parsedSource["ui"] = $$createField4_0($$parsedSource["ui"]);
+            $$parsedSource["ui"] = $$createField3_0($$parsedSource["ui"]);
         }
         return new Config($$parsedSource as Partial<Config>);
     }

@@ -51,13 +51,6 @@ func (a *App) ServiceStartup(ctx context.Context, _ application.ServiceOptions) 
 			a.cfg = config.Default()
 		} else {
 			a.cfg = cfg
-			if migrated, migrateErr := config.MigrateLibraryLayout(a.cfg); migrateErr != nil {
-				log.Printf("library migration: %v", migrateErr)
-			} else if migrated {
-				if saveErr := config.Save(path, a.cfg); saveErr != nil {
-					log.Printf("save migrated config: %v", saveErr)
-				}
-			}
 		}
 	}
 
@@ -236,6 +229,10 @@ func (a *App) ClearActivityLog() {
 	a.activity.Clear()
 }
 
+func (a *App) ClearActivityLogScope(scope string) {
+	a.activity.ClearScope(scope)
+}
+
 func (a *App) SearchPS3(tid string, includeDRMFree bool) (*psn.Title, error) {
 	return a.psn.LookupPS3WithDRMFree(a.ctx, tid, includeDRMFree)
 }
@@ -288,99 +285,6 @@ func (a *App) DeleteLibraryItems(paths []string) error {
 	return nil
 }
 
-func (a *App) UpdateDownloadLibrary() ([]downloads.Title, error) {
-	titles, err := downloads.Scan(a.cfg.Storage.LibraryDir)
-	if err != nil {
-		return nil, err
-	}
-
-	queued := 0
-	for _, t := range titles {
-		n, err := a.enqueueUpdatesForCachedTitle(t)
-		if err != nil {
-			a.activity.Warnf("library", "%s/%s update check failed: %v", t.Mode, t.TitleID, err)
-			continue
-		}
-		queued += n
-	}
-	a.activity.Infof("library", "Library update check queued %d item(s)", queued)
-	return downloads.Scan(a.cfg.Storage.LibraryDir)
-}
-
-func (a *App) enqueueUpdatesForCachedTitle(t downloads.Title) (int, error) {
-	if t.TitleID == "firmware" {
-		return a.enqueueFirmwareUpdatesForCachedTitle(t)
-	}
-
-	var title *psn.Title
-	var err error
-	switch t.Mode {
-	case "ps3":
-		title, err = a.psn.LookupPS3(a.ctx, t.TitleID)
-	case "ps4":
-		title, err = a.psn.LookupPS4(a.ctx, t.TitleID)
-	case "psvita":
-		title, err = a.psn.LookupVita(a.ctx, t.TitleID)
-	default:
-		return 0, nil
-	}
-	if err != nil {
-		return 0, err
-	}
-
-	queued := 0
-	for _, u := range title.Updates {
-		if library.CompareVersion(u.Version, t.LatestVersion) <= 0 {
-			continue
-		}
-		if _, err := a.EnqueueDownload(jobs.Request{
-			TitleID:   t.TitleID,
-			TitleName: title.Name,
-			Mode:      t.Mode,
-			Update:    u,
-		}); err != nil {
-			return queued, err
-		}
-		queued++
-	}
-	return queued, nil
-}
-
-func (a *App) enqueueFirmwareUpdatesForCachedTitle(t downloads.Title) (int, error) {
-	list, err := a.ListFirmware(t.Mode)
-	if err != nil {
-		return 0, err
-	}
-
-	queued := 0
-	for _, e := range list.Entries {
-		if !strings.EqualFold(e.Locale, t.Locale) {
-			continue
-		}
-		if library.CompareVersion(e.Version, t.LatestVersion) <= 0 {
-			continue
-		}
-		name := strings.TrimSpace(strings.Join([]string{strings.ToUpper(t.Mode), e.Type, e.Locale}, " "))
-		if _, err := a.EnqueueDownload(jobs.Request{
-			TitleID:   "firmware",
-			TitleName: name,
-			Mode:      t.Mode,
-			Locale:    e.Locale,
-			Kind:      jobs.KindFirmware,
-			Update: psn.Update{
-				Version: e.Version,
-				Size:    e.Size,
-				SHA1Sum: e.SHA1Sum,
-				URL:     e.URL,
-			},
-		}); err != nil {
-			return queued, err
-		}
-		queued++
-	}
-	return queued, nil
-}
-
 // InstallJob extracts a finished download into the configured RPCS3
 // dev_hdd0/game path. PS3-only.
 func (a *App) InstallJob(id string) error {
@@ -408,116 +312,158 @@ func (a *App) ListRPCS3Library() ([]rpcs3.Entry, error) {
 	return rpcs3.ParseGamesYML(path)
 }
 
-// ReconcileLibraryPS3 enriches each RPCS3 library entry with server +
-// local-cache state, producing per-title status badges.
+// ReconcileLibraryPS3 compares every server package for each RPCS3 title with
+// the exact files present in the download library.
 func (a *App) ReconcileLibraryPS3() ([]library.Row, error) {
 	entries, err := a.ListRPCS3Library()
 	if err != nil {
 		return []library.Row{}, err
 	}
 	a.activity.Infof("library", "Reconciling %d title(s) against PSN…", len(entries))
-	rows := library.ReconcilePS3WithPaths(a.ctx, entries, a.psn, a.cfg.RPCS3.HDD0Game, a.cfg.Storage.LibraryDir)
+	rows := library.ReconcilePS3(a.ctx, entries, a.psn, a.cfg.Storage.LibraryDir)
 
-	// Summarize the result so the Activity console narrates what the numbers mean.
-	upToDate, updates, missing, unreachable := 0, 0, 0, 0
+	all, some, none, unreachable := 0, 0, 0, 0
 	for _, r := range rows {
 		switch r.Status {
-		case library.StatusUpToDate:
-			upToDate++
-		case library.StatusUpdateAvailable:
-			updates++
-		case library.StatusMissingAll:
-			missing++
+		case library.StatusAllDownloaded:
+			all++
+		case library.StatusSomeDownloaded:
+			some++
+		case library.StatusNoneDownloaded:
+			none++
 		case library.StatusUnreachable:
 			unreachable++
 			a.activity.Warnf("library", "%s: server unreachable (%s)", r.TitleID, r.Error)
 		}
 	}
-	a.activity.Infof("library", "Reconcile complete: %d up to date, %d update(s) available, %d missing, %d unreachable",
-		upToDate, updates, missing, unreachable)
+	a.activity.Infof("library", "Reconcile complete: %d all downloaded, %d partial, %d none downloaded, %d unreachable",
+		all, some, none, unreachable)
 	return rows, nil
 }
 
-// SyncTitlePS3 enqueues only the missing updates for a single title.
+// SyncTitlePS3 makes one RPCS3 title folder exactly match the packages
+// advertised by the server: extras are removed and missing packages queued.
 func (a *App) SyncTitlePS3(tid string) ([]string, error) {
 	entries, err := a.ListRPCS3Library()
 	if err != nil {
 		return nil, err
 	}
 
-	for _, e := range entries {
-		if e.TitleID != tid {
-			continue
+	for _, entry := range entries {
+		if entry.TitleID == tid {
+			return a.syncRPCS3Title(entry)
 		}
-
-		cached, _ := library.HighestCachedVersionIn(a.cfg.Storage.LibraryDir, "ps3", tid)
-		title, err := a.psn.LookupPS3(a.ctx, tid)
-		if err != nil {
-			return nil, err
-		}
-
-		jobIDs := []string{}
-		for _, u := range title.Updates {
-			if library.CompareVersion(u.Version, cached) <= 0 {
-				continue
-			}
-			jobID, err := a.EnqueueDownload(jobs.Request{
-				TitleID:   tid,
-				TitleName: title.Name,
-				Mode:      "ps3",
-				Update:    u,
-			})
-			if err != nil {
-				return jobIDs, err
-			}
-			jobIDs = append(jobIDs, jobID)
-		}
-		return jobIDs, nil
 	}
-
-	return nil, fmt.Errorf("title %s not found in library", tid)
+	return nil, fmt.Errorf("title %s not found in RPCS3", tid)
 }
 
-// DeleteTitleCachePS3 removes all downloaded updates for one PS3 title.
-func (a *App) DeleteTitleCachePS3(tid string) error {
-	if err := psn.ValidateTitleID(tid); err != nil {
-		return err
+// SyncAllPS3 removes title folders not represented in RPCS3, then exactly
+// synchronizes every RPCS3 title against the server.
+func (a *App) SyncAllPS3() ([]string, error) {
+	entries, err := a.ListRPCS3Library()
+	if err != nil {
+		return nil, err
 	}
-	dir, err := config.TitleDirForRoot(a.cfg.Storage.LibraryDir, "ps3")
+	if err := a.removeNonRPCS3TitleFolders(entries); err != nil {
+		return nil, err
+	}
+
+	jobIDs := []string{}
+	for _, entry := range entries {
+		ids, syncErr := a.syncRPCS3Title(entry)
+		if syncErr != nil {
+			a.activity.Warnf("library", "%s sync failed: %v", entry.TitleID, syncErr)
+			continue
+		}
+		jobIDs = append(jobIDs, ids...)
+	}
+	return jobIDs, nil
+}
+
+func (a *App) syncRPCS3Title(entry rpcs3.Entry) ([]string, error) {
+	if err := psn.ValidateTitleID(entry.TitleID); err != nil {
+		return nil, err
+	}
+	title, err := a.psn.LookupPS3(a.ctx, entry.TitleID)
+	if err != nil {
+		return nil, err
+	}
+	plan, err := library.PlanTitleSync(a.cfg.Storage.LibraryDir, "ps3", entry.TitleID, title.Updates)
+	if err != nil {
+		return nil, err
+	}
+	removableExtras := a.removableSyncTargets(plan.Extras)
+	if len(removableExtras) > 0 {
+		if err := downloads.Delete(a.cfg.Storage.LibraryDir, removableExtras); err != nil {
+			return nil, err
+		}
+		a.activity.Infof("library", "%s: removed %d file(s) not advertised by the server", entry.TitleID, len(removableExtras))
+		go a.emitDownloadLibrary()
+	}
+
+	jobIDs := make([]string, 0, len(plan.Missing))
+	for _, update := range plan.Missing {
+		jobID, err := a.EnqueueDownload(jobs.Request{
+			TitleID:   entry.TitleID,
+			TitleName: title.Name,
+			Mode:      "ps3",
+			Update:    update,
+		})
+		if err != nil {
+			return jobIDs, err
+		}
+		jobIDs = append(jobIDs, jobID)
+	}
+	a.activity.Infof("library", "%s: sync queued %d missing package(s)", entry.TitleID, len(jobIDs))
+	return jobIDs, nil
+}
+
+func (a *App) removeNonRPCS3TitleFolders(entries []rpcs3.Entry) error {
+	allowed := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		allowed = append(allowed, entry.TitleID)
+	}
+	targets, err := library.ExtraTitleFolders(a.cfg.Storage.LibraryDir, "ps3", allowed)
 	if err != nil {
 		return err
 	}
-	target := filepath.Join(dir, tid)
-	if err := os.RemoveAll(target); err != nil {
-		return fmt.Errorf("remove cache for %s: %w", tid, err)
+	targets = a.removableSyncTargets(targets)
+	if len(targets) == 0 {
+		return nil
 	}
-	library.InvalidateInstalledVersionCache(tid)
-	a.activity.Infof("library", "Deleted cached downloads for %s", tid)
+	if err := downloads.Delete(a.cfg.Storage.LibraryDir, targets); err != nil {
+		return err
+	}
+	a.activity.Infof("library", "Removed %d PS3 title folder(s) not present in RPCS3", len(targets))
 	go a.emitDownloadLibrary()
 	return nil
 }
 
-// OpenTitleCachePS3 opens one PS3 title's downloaded-update folder.
-func (a *App) OpenTitleCachePS3(tid string) error {
-	if err := psn.ValidateTitleID(tid); err != nil {
-		return err
-	}
-	dir, err := config.TitleDirForRoot(a.cfg.Storage.LibraryDir, "ps3")
-	if err != nil {
-		return err
-	}
-	target := filepath.Join(dir, tid)
-	info, err := os.Stat(target)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return fmt.Errorf("no cached downloads for %s", tid)
+func (a *App) removableSyncTargets(targets []string) []string {
+	protected := []string{}
+	for _, job := range a.jobs.List() {
+		switch job.State {
+		case jobs.StateQueued, jobs.StateDownloading, jobs.StatePaused, jobs.StateResuming, jobs.StateVerifying:
+			protected = append(protected, job.DestPath, job.DestPath+".part")
 		}
-		return fmt.Errorf("open cache for %s: %w", tid, err)
 	}
-	if !info.IsDir() {
-		return fmt.Errorf("cache path for %s is not a folder", tid)
+	removable := make([]string, 0, len(targets))
+	for _, target := range targets {
+		blocked := false
+		for _, activePath := range protected {
+			rel, err := filepath.Rel(target, activePath)
+			if err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) && !filepath.IsAbs(rel) {
+				blocked = true
+				break
+			}
+		}
+		if blocked {
+			a.activity.Warnf("library", "Skipped removing %s because an active download uses it", target)
+			continue
+		}
+		removable = append(removable, target)
 	}
-	return a.OpenFolder(target)
+	return removable
 }
 
 // OpenFolder opens the given directory in the system's file manager.

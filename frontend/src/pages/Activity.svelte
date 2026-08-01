@@ -21,11 +21,11 @@
   let activeJobs = $derived($jobsList.filter((job) => ACTIVE_JOB_STATES.has(String(job.state))))
 
   async function clearLog() {
-    await clearActivityLog()
+    await clearActivityLog(selectedScope)
   }
 
   function copyLog() {
-    const text = logEntries.map(formatLogLine).join('\n')
+    const text = filteredEntries.map(formatLogLine).join('\n')
     navigator.clipboard.writeText(text)
   }
 
@@ -95,11 +95,11 @@
       <p class="mt-1 text-xs text-muted">PSN, jobs, library, and package operations</p>
     </div>
     <div class="flex items-center gap-2">
+      <button onclick={() => (paused = !paused)} class="btn btn-secondary">
+        {paused ? 'Resume scroll' : 'Pause scroll'}
+      </button>
       <button onclick={clearLog} class="btn btn-secondary">Clear</button>
       <button onclick={copyLog} class="btn btn-secondary">Copy</button>
-      <button onclick={() => (paused = !paused)} class="btn btn-secondary">
-        {paused ? 'Unpause scroll' : 'Pause scroll'}
-      </button>
     </div>
   </div>
 
@@ -132,7 +132,7 @@
         onclick={() => (selectedScope = scope)}
         class="btn {selectedScope === scope ? 'btn-primary' : 'btn-secondary'}"
       >
-        {scope}
+        {scope.charAt(0).toUpperCase() + scope.slice(1)}
       </button>
     {/each}
   </div>

@@ -3,21 +3,19 @@
   import type { Mode } from '../app/types'
   import {
     AutoDetectGamesYML,
-    DeleteTitleCachePS3,
     DeleteLibraryItems,
     EnqueueDownload,
     InstallFolderPS3,
     InstallJob,
     ListDownloadLibrary,
     OpenFolder,
-    OpenTitleCachePS3,
     PickDirectory,
     ReconcileLibraryPS3,
     SearchPS3,
     SearchPS4,
     SearchVita,
+    SyncAllPS3,
     SyncTitlePS3,
-    UpdateDownloadLibrary,
   } from '../../bindings/PSNWDL/app'
   import { Events } from '@wailsio/runtime'
   import * as jobs from '../../bindings/PSNWDL/internal/jobs'
@@ -42,12 +40,11 @@
   type Title = downloads.Title
   type File = downloads.File
   const ACTIVE_JOB_STATES = new Set(['queued', 'downloading', 'paused', 'resuming', 'verifying'])
-  const EMULATOR_COLUMN_LABELS = ['Title', 'Installed to server', 'Status', 'Action']
+  const EMULATOR_COLUMN_LABELS = ['Title', 'Status', 'Action']
 
   let { mode, defaultDownload = 'firmware', appConfig }: Props = $props()
 
   let source = $state<Source>('firmware')
-  let selectedDownloadBuckets = $state<Record<string, string[]>>({})
   let downloadError = $state<string | null>(null)
   let emulatorError = $state<string | null>(null)
   let syncingAll = $state(false)
@@ -59,19 +56,17 @@
   let lastMode = $state<Mode>('ps3')
   let emulatorConfigKey = $state('')
   let expandedLibraryTitles = $state<Record<string, boolean>>({})
-  let downloadColumnWidths = $state([44, 100, 90, 220, 90])
-  let emulatorColumnWidths = $state([200, 140, 120, 220])
+  let downloadColumnWidths = $state([100, 90, 180, 80, 120])
+  let emulatorColumnWidths = $state([260, 150, 120])
+  let downloadTableMinWidth = $state(0)
+  let emulatorTableMinWidth = $state(0)
   let titleState = $derived(searchState[mode])
   let normalizedID = $derived(titleState.titleID.trim().toUpperCase())
   let canSearch = $derived(/^[A-Z]{4}\d{5}$/.test(normalizedID) && !titleState.loading && mode !== 'ps5')
   let canSourceSearch = $derived(source === 'firmware' ? $fetching !== mode : canSearch)
   let cachedFirmware = $derived($cache[mode] ?? null)
-  let downloadColumnLabels = $derived(['Selection', 'Kind', 'Version', source === 'firmware' ? 'Locale' : 'Scope', 'Size'])
+  let downloadColumnLabels = $derived(['Kind', 'Version', source === 'firmware' ? 'Locale' : 'Scope', 'Size', 'Action'])
   let firmwareLoading = $derived($fetching === mode && !cachedFirmware?.list)
-  let downloadSelectionKey = $derived(
-    `${mode}:${source}:${source === 'title' ? titleState.result?.id || normalizedID || 'empty' : 'firmware'}`
-  )
-  let selectedDownloads = $derived(selectedDownloadBuckets[downloadSelectionKey] ?? [])
   let selectedLibraryCount = $derived(libraryState.selected.length)
   let finishedPS3Jobs = $derived(
     $jobsList.filter(
@@ -105,8 +100,8 @@
   $effect(() => {
     if (!emulatorState.initialized) return
     const nextKey = emulatorConfigSignature(appConfig)
-    if (nextKey === emulatorConfigKey) return
     hydrateEmulatorConfig(appConfig)
+    if (nextKey === emulatorConfigKey) return
     emulatorConfigKey = nextKey
     if (mode === 'ps3') void refreshEmulator()
   })
@@ -199,10 +194,6 @@
     return rows.sort((a, b) => compareVersion(b.version, a.version))
   })
   let downloadRows = $derived(allDownloadRows)
-  let availableDownloadRows = $derived(downloadRows.filter((row) => !isQueued(row) && !downloaded(row)))
-  let selectedAvailableCount = $derived(
-    availableDownloadRows.filter((row) => selectedDownloads.includes(row.key)).length
-  )
 
   interface DownloadRow {
     key: string
@@ -239,7 +230,7 @@
   }
 
   function emulatorConfigSignature(next: config.Config): string {
-    return `${next.rpcs3.games_yml}\0${next.rpcs3.hdd0_game}\0${next.storage.library_dir}`
+    return `${next.rpcs3.games_yml}\0${next.storage.library_dir}`
   }
 
   async function searchTitle() {
@@ -247,7 +238,6 @@
       titleState.loading = true
       titleState.error = null
       titleState.result = null
-      selectedDownloadBuckets[downloadSelectionKey] = []
       downloadError = null
     try {
       switch (mode) {
@@ -305,17 +295,11 @@
     await EnqueueDownload(req)
   }
 
-  async function enqueueSelected() {
-    const selected = downloadRows.filter(
-      (row) => selectedDownloads.includes(row.key) && !isQueued(row) && !downloaded(row)
-    )
-    if (selected.length === 0) return
+  async function enqueueSingle(row: DownloadRow) {
+    if (isQueued(row) || downloaded(row)) return
     downloadError = null
     try {
-      for (const row of selected) {
-        await enqueueRow(row)
-      }
-      selectedDownloadBuckets[downloadSelectionKey] = []
+      await enqueueRow(row)
     } catch (e) {
       downloadError = e instanceof Error ? e.message : String(e)
     }
@@ -332,19 +316,6 @@
       libraryState.titles = []
     } finally {
       libraryState.loading = false
-    }
-  }
-
-  async function updateLibrary() {
-    libraryState.updating = true
-    libraryState.error = null
-    try {
-      libraryState.titles = (await UpdateDownloadLibrary()) ?? []
-      pruneLibrarySelection()
-    } catch (e) {
-      libraryState.error = e instanceof Error ? e.message : String(e)
-    } finally {
-      libraryState.updating = false
     }
   }
 
@@ -365,7 +336,7 @@
 
   async function refreshEmulator() {
     if (mode !== 'ps3') return
-    if (isMissingEmulatorConfig()) {
+    if (isMissingGamesConfig()) {
       emulatorState.rows = []
       emulatorState.loadError = null
       return
@@ -395,15 +366,10 @@
   }
 
   async function syncAllNeeded() {
-    const needed = emulatorState.rows.filter((row) => row.status === 'update_available' || row.status === 'missing_all')
-    if (needed.length === 0) return
     syncingAll = true
     emulatorError = null
     try {
-      const jobIDs: string[] = []
-      for (const row of needed) {
-        jobIDs.push(...((await SyncTitlePS3(row.title_id)) ?? []))
-      }
+      const jobIDs = (await SyncAllPS3()) ?? []
       trackEmulatorJobs(jobIDs)
       if (jobIDs.length === 0) await refreshEmulator()
     } catch (e) {
@@ -429,18 +395,8 @@
     }
   }
 
-  async function deleteCache(titleID: string) {
-    emulatorError = null
-    try {
-      await DeleteTitleCachePS3(titleID)
-      await refreshEmulator()
-    } catch (e) {
-      emulatorError = e instanceof Error ? e.message : String(e)
-    }
-  }
-
   async function installPKGFolder() {
-    if (!emulatorState.cfg || isMissingEmulatorConfig()) return
+    if (!emulatorState.cfg || isMissingInstallConfig()) return
     const picked = await PickDirectory('Select PS3 PKG folder', emulatorState.cfg.storage.library_dir)
     if (!picked) return
     installingFolder = true
@@ -452,15 +408,6 @@
       emulatorError = e instanceof Error ? e.message : String(e)
     } finally {
       installingFolder = false
-    }
-  }
-
-  async function openCacheFolder(titleID: string) {
-    emulatorError = null
-    try {
-      await OpenTitleCachePS3(titleID)
-    } catch (e) {
-      emulatorError = e instanceof Error ? e.message : String(e)
     }
   }
 
@@ -493,25 +440,12 @@
     return (cachedTitle.files ?? []).some((file) => file.version === version)
   }
 
-  function selectedDownload(key: string): boolean {
-    return selectedDownloads.includes(key)
+  function isMissingGamesConfig(): boolean {
+    return !emulatorState.gamesYMLInput
   }
 
-  function setSelectedDownload(key: string, checked: boolean) {
-    const current = selectedDownloads
-    if (checked) {
-      if (!current.includes(key)) selectedDownloadBuckets[downloadSelectionKey] = [...current, key]
-      return
-    }
-    selectedDownloadBuckets[downloadSelectionKey] = current.filter((item) => item !== key)
-  }
-
-  function selectAllDownloads(checked: boolean) {
-    selectedDownloadBuckets[downloadSelectionKey] = checked ? availableDownloadRows.map((row) => row.key) : []
-  }
-
-  function isMissingEmulatorConfig(): boolean {
-    return !emulatorState.gamesYMLInput || !emulatorState.hdd0Input
+  function isMissingInstallConfig(): boolean {
+    return !emulatorState.hdd0Input
   }
 
   function selected(path: string): boolean {
@@ -586,30 +520,36 @@
     )
   }
 
-  function columnMinimum(table: 'download' | 'emulator', index: number): number {
-    return table === 'download' && index === 0 ? 40 : 64
+  function measureColumns(event: Event, table: 'download' | 'emulator'): { widths: number[]; total: number } {
+    const tableElement = (event.currentTarget as HTMLElement).closest('table')
+    const cells = tableElement ? Array.from(tableElement.querySelectorAll<HTMLTableCellElement>('thead th')) : []
+    const measured = cells.map((cell) => cell.getBoundingClientRect().width)
+    const widths = table === 'download' ? downloadColumnWidths : emulatorColumnWidths
+    if (measured.length === widths.length) {
+      widths.splice(0, widths.length, ...measured)
+    }
+    const total = tableElement?.getBoundingClientRect().width ?? widths.reduce((sum, width) => sum + width, 0)
+    if (table === 'download') downloadTableMinWidth = total
+    else emulatorTableMinWidth = total
+    return { widths, total }
   }
 
-  function resizeColumnPair(widths: number[], table: 'download' | 'emulator', index: number, delta: number, starts = widths) {
-    if (widths.length < 2) return
-    const partner = index === widths.length - 1 ? index - 1 : index + 1
-    const targetStart = starts[index]
-    const partnerStart = starts[partner]
-    const minDelta = columnMinimum(table, index) - targetStart
-    const maxDelta = partnerStart - columnMinimum(table, partner)
-    const applied = Math.min(maxDelta, Math.max(minDelta, delta))
-    widths[index] = targetStart + applied
-    widths[partner] = partnerStart - applied
+  function setTableMinWidth(table: 'download' | 'emulator', width: number) {
+    if (table === 'download') downloadTableMinWidth = width
+    else emulatorTableMinWidth = width
   }
 
   function resizeColumn(event: PointerEvent, table: 'download' | 'emulator', index: number) {
     event.preventDefault()
-    const widths = table === 'download' ? downloadColumnWidths : emulatorColumnWidths
+    const measured = measureColumns(event, table)
+    const widths = measured.widths
     const startX = event.clientX
     const starts = [...widths]
 
     const move = (nextEvent: PointerEvent) => {
-      resizeColumnPair(widths, table, index, nextEvent.clientX - startX, starts)
+      const delta = Math.max(64 - starts[index], nextEvent.clientX - startX)
+      widths[index] = starts[index] + delta
+      setTableMinWidth(table, measured.total + delta)
     }
     const stop = () => {
       window.removeEventListener('pointermove', move)
@@ -619,15 +559,15 @@
     window.addEventListener('pointerup', stop)
   }
 
-  function nudgeColumn(table: 'download' | 'emulator', index: number, delta: number) {
-    const widths = table === 'download' ? downloadColumnWidths : emulatorColumnWidths
-    resizeColumnPair(widths, table, index, delta, [...widths])
-  }
-
   function resizeColumnWithKeyboard(event: KeyboardEvent, table: 'download' | 'emulator', index: number) {
     if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
     event.preventDefault()
-    nudgeColumn(table, index, event.key === 'ArrowLeft' ? -8 : 8)
+    const measured = measureColumns(event, table)
+    const delta = event.key === 'ArrowLeft' ? -8 : 8
+    const nextWidth = Math.max(64, measured.widths[index] + delta)
+    const applied = nextWidth - measured.widths[index]
+    measured.widths[index] = nextWidth
+    setTableMinWidth(table, measured.total + applied)
   }
 
   function formatSize(bytes: number | undefined): string {
@@ -661,19 +601,17 @@
   }
 
   const STATUS_BADGE: Record<string, string> = {
-    up_to_date: 'bg-success-bg text-success-fg',
-    update_available: 'bg-warn-bg text-warn-fg',
-    missing_all: 'bg-error-bg text-error-fg',
-    cached_not_installed: 'bg-surface-3 text-fg',
+    all_downloaded: 'bg-success-bg text-success-fg',
+    some_downloaded: 'bg-warn-bg text-warn-fg',
+    none_downloaded: 'bg-error-bg text-error-fg',
     no_updates: 'bg-surface-2 text-muted',
-    unreachable: 'bg-surface-2 text-muted-soft',
+    unreachable: 'bg-error-bg text-error-fg',
   }
 
   const STATUS_LABEL: Record<string, string> = {
-    up_to_date: 'Up to date',
-    update_available: 'Update available',
-    missing_all: 'Missing all',
-    cached_not_installed: 'Cached, not installed',
+    all_downloaded: 'All downloaded',
+    some_downloaded: 'Some downloaded',
+    none_downloaded: 'None downloaded',
     no_updates: 'No updates',
     unreachable: 'Server unreachable',
   }
@@ -693,28 +631,27 @@
           refreshSource()
         }}
       >
+        <label
+          class="flex w-28 items-center gap-1 text-xs text-muted"
+          class:invisible={source !== 'title' || mode !== 'ps3'}
+          title="Include alternate DRM-free package URLs published in PS3 update metadata"
+        >
+          <input type="checkbox" bind:checked={includeDRMFree} disabled={source !== 'title' || mode !== 'ps3'} />
+          Include DRM-free
+        </label>
+        <input
+          bind:value={titleState.titleID}
+          placeholder="BCUS98114"
+          aria-label="Title ID"
+          maxlength="9"
+          disabled={source !== 'title'}
+          class="input header-control h-8 w-32 px-2"
+          class:invisible={source !== 'title'}
+        />
         <select bind:value={source} aria-label="Download type" class="input header-control h-8 px-2">
           <option value="firmware">Firmware</option>
           {#if mode !== 'ps5'}<option value="title">Title</option>{/if}
         </select>
-        {#if source === 'title'}
-          <input
-            bind:value={titleState.titleID}
-            placeholder="BCUS98114"
-            aria-label="Title ID"
-            maxlength="9"
-            class="input header-control h-8 w-32 px-2"
-          />
-          {#if mode === 'ps3'}
-            <label
-              class="flex items-center gap-1 text-xs text-muted"
-              title="Include alternate DRM-free package URLs published in PS3 update metadata"
-            >
-              <input type="checkbox" bind:checked={includeDRMFree} />
-              Include DRM-free
-            </label>
-          {/if}
-        {/if}
         <button type="submit" disabled={!canSourceSearch} class="btn btn-secondary">Search</button>
       </form>
     </div>
@@ -725,21 +662,6 @@
       </div>
     {/if}
 
-    <div class="flex items-center justify-between border-b border-border px-3 py-2 text-xs text-muted-soft">
-      <label class="flex items-center gap-2">
-        <input
-          type="checkbox"
-          checked={availableDownloadRows.length > 0 && selectedAvailableCount === availableDownloadRows.length}
-          onchange={(e) => selectAllDownloads(e.currentTarget.checked)}
-        />
-        Select all
-        <span class="inline-block min-w-16 text-muted-faint">{selectedAvailableCount} selected</span>
-      </label>
-      <button onclick={enqueueSelected} disabled={selectedAvailableCount === 0} class="btn btn-primary">
-        Download selected
-      </button>
-    </div>
-
     <div class="min-h-0 flex-1 overflow-auto">
       {#if firmwareLoading}
         <div class="empty">Loading latest firmware</div>
@@ -748,7 +670,7 @@
           {source === 'title' ? 'Title update results' : 'Latest firmware by region'}
         </div>
       {:else}
-        <table class="data-table table-fixed">
+        <table class="data-table table-fixed" style={downloadTableMinWidth ? `min-width: ${downloadTableMinWidth}px` : undefined}>
           <colgroup>
             {#each downloadColumnWidths as width, index (index)}
               <col style={`width: ${width}px`} />
@@ -758,16 +680,14 @@
             <tr>
               {#each downloadColumnLabels as label, index (label)}
                 <th>
-                  {#if index > 0}{label}{/if}
-                  {#if index < downloadColumnLabels.length - 1}
-                    <button
-                      type="button"
-                      class="column-resizer"
-                      aria-label={`Resize ${label} column`}
-                      onpointerdown={(event) => resizeColumn(event, 'download', index)}
-                      onkeydown={(event) => resizeColumnWithKeyboard(event, 'download', index)}
-                    ></button>
-                  {/if}
+                  {label}
+                  <button
+                    type="button"
+                    class="column-resizer"
+                    aria-label={`Resize ${label} column`}
+                    onpointerdown={(event) => resizeColumn(event, 'download', index)}
+                    onkeydown={(event) => resizeColumnWithKeyboard(event, 'download', index)}
+                  ></button>
                 </th>
               {/each}
             </tr>
@@ -775,15 +695,6 @@
           <tbody>
             {#each downloadRows as row (row.key)}
               <tr aria-disabled={downloaded(row) || isQueued(row)}>
-                <td>
-                  <input
-                    type="checkbox"
-                    checked={downloaded(row) || isQueued(row) || selectedDownload(row.key)}
-                    disabled={isQueued(row) || downloaded(row)}
-                    title={downloaded(row) ? 'Already in Library' : isQueued(row) ? 'Download in progress' : undefined}
-                    onchange={(e) => setSelectedDownload(row.key, e.currentTarget.checked)}
-                  />
-                </td>
                 <td>{row.kind}</td>
                 <td class="font-mono">v{row.version}</td>
                 <td class="truncate text-muted">
@@ -794,6 +705,15 @@
                   {/if}
                 </td>
                 <td class="text-muted">{formatSize(row.size)}</td>
+                <td>
+                  <button
+                    onclick={() => enqueueSingle(row)}
+                    disabled={isQueued(row) || downloaded(row)}
+                    class="btn btn-secondary w-24 justify-center"
+                  >
+                    {downloaded(row) ? 'Downloaded' : isQueued(row) ? 'In progress' : 'Download'}
+                  </button>
+                </td>
               </tr>
             {/each}
           </tbody>
@@ -812,15 +732,15 @@
         <div class="flex flex-wrap items-center justify-end gap-2">
           <button
             onclick={syncAllNeeded}
-            disabled={syncingAll || emulatorState.rows.length === 0 || isMissingEmulatorConfig()}
+            disabled={syncingAll || isMissingGamesConfig()}
             class="btn btn-primary"
-            title="Download missing PS3 updates for the listed RPCS3 titles"
+            title="Make the PS3 title library exactly match the titles and updates listed by RPCS3 and PSN"
           >
-            Download updates
+            {syncingAll ? 'Syncing all' : 'Sync all'}
           </button>
           <button
             onclick={installFinishedPS3Jobs}
-            disabled={installingDone || finishedPS3Jobs.length === 0 || isMissingEmulatorConfig()}
+            disabled={installingDone || finishedPS3Jobs.length === 0 || isMissingInstallConfig()}
             class="btn btn-secondary"
             title="Install all completed PS3 update downloads into RPCS3"
           >
@@ -828,13 +748,13 @@
           </button>
           <button
             onclick={installPKGFolder}
-            disabled={installingFolder || isMissingEmulatorConfig()}
+            disabled={installingFolder || isMissingInstallConfig()}
             class="btn btn-secondary"
             title="Choose a folder of PS3 pkg files and install them into RPCS3"
           >
             {installingFolder ? 'Installing folder' : 'Install pkg folder'}
           </button>
-          <button onclick={refreshEmulator} disabled={emulatorState.loading || isMissingEmulatorConfig()} class="btn btn-secondary">
+          <button onclick={refreshEmulator} disabled={emulatorState.loading || isMissingGamesConfig()} class="btn btn-secondary">
             Refresh
           </button>
         </div>
@@ -846,11 +766,11 @@
     {:else if !emulatorState.cfg}
       <div class="empty">Loading emulator settings</div>
     {:else}
-      {#if isMissingEmulatorConfig() || (emulatorState.loadError && !isMissingEmulatorConfig()) || emulatorError}
+      {#if isMissingGamesConfig() || isMissingInstallConfig() || emulatorState.loadError || emulatorError}
         <div class="border-b border-error/40 bg-error-bg px-3 py-2 text-xs text-error-fg">
           {#if !emulatorState.gamesYMLInput}<div>Invalid setting: games.yml</div>{/if}
           {#if !emulatorState.hdd0Input}<div>Invalid setting: dev_hdd0/game</div>{/if}
-          {#if !isMissingEmulatorConfig() && (emulatorState.loadError || emulatorError)}
+          {#if !isMissingGamesConfig() && (emulatorState.loadError || emulatorError)}
             <div>{emulatorState.loadError || emulatorError}</div>
           {/if}
         </div>
@@ -862,7 +782,7 @@
         {:else if emulatorState.rows.length === 0}
           <div class="empty">Emulator titles</div>
         {:else}
-          <table class="data-table table-fixed">
+          <table class="data-table table-fixed" style={emulatorTableMinWidth ? `min-width: ${emulatorTableMinWidth}px` : undefined}>
             <colgroup>
               {#each emulatorColumnWidths as width, index (index)}
                 <col style={`width: ${width}px`} />
@@ -872,16 +792,14 @@
               <tr>
                 {#each EMULATOR_COLUMN_LABELS as label, index (label)}
                   <th>
-                    {label === 'Installed to server' ? 'Installed -> Server' : label}
-                    {#if index < EMULATOR_COLUMN_LABELS.length - 1}
-                      <button
-                        type="button"
-                        class="column-resizer"
-                        aria-label={`Resize ${label} column`}
-                        onpointerdown={(event) => resizeColumn(event, 'emulator', index)}
-                        onkeydown={(event) => resizeColumnWithKeyboard(event, 'emulator', index)}
-                      ></button>
-                    {/if}
+                    {label}
+                    <button
+                      type="button"
+                      class="column-resizer"
+                      aria-label={`Resize ${label} column`}
+                      onpointerdown={(event) => resizeColumn(event, 'emulator', index)}
+                      onkeydown={(event) => resizeColumnWithKeyboard(event, 'emulator', index)}
+                    ></button>
                   </th>
                 {/each}
               </tr>
@@ -893,26 +811,20 @@
                     <div class="max-w-48 truncate" title={row.install_dir}>{row.name || row.title_id}</div>
                     <div class="font-mono text-xs text-muted-soft">{row.title_id}</div>
                   </td>
-                  <td class="text-xs text-muted">
-                    {row.installed_version || row.latest_local || '-'} -> {row.latest_server || '-'}
-                  </td>
                   <td>
                     <span class="rounded px-2 py-0.5 text-xs {STATUS_BADGE[row.status] ?? 'bg-surface-2 text-muted'}" title={row.error}>
                       {STATUS_LABEL[row.status] ?? row.status}
+                      {#if row.update_count > 0} ({row.downloaded_count}/{row.update_count}){/if}
                     </span>
                   </td>
                   <td>
-                    <div class="flex flex-wrap gap-1">
-                      {#if row.status === 'update_available' || row.status === 'missing_all'}
-                        <button onclick={() => syncTitle(row.title_id)} disabled={titleDownloadInProgress(row.title_id)} class="btn btn-secondary">
-                          {titleDownloadInProgress(row.title_id) ? 'In progress' : 'Download'}
-                        </button>
-                      {/if}
-                      {#if row.latest_local}
-                        <button onclick={() => openCacheFolder(row.title_id)} class="btn btn-secondary">Open</button>
-                        <button onclick={() => deleteCache(row.title_id)} class="btn btn-secondary">Delete</button>
-                      {/if}
-                    </div>
+                    <button
+                      onclick={() => syncTitle(row.title_id)}
+                      disabled={row.downloaded_count >= row.update_count || titleDownloadInProgress(row.title_id)}
+                      class="btn btn-secondary w-20 justify-center"
+                    >
+                      {titleDownloadInProgress(row.title_id) ? 'Syncing' : 'Sync'}
+                    </button>
                   </td>
                 </tr>
               {/each}
@@ -930,14 +842,6 @@
         <p>{mode.toUpperCase()} downloaded firmware and title updates</p>
       </div>
       <div class="flex items-center gap-2">
-        <button
-          onclick={updateLibrary}
-          disabled={libraryState.loading || libraryState.updating}
-          class="btn btn-primary"
-          title="Download newer versions of items already in Library"
-        >
-          Download updates
-        </button>
         <button onclick={deleteSelectedLibrary} disabled={selectedLibraryCount === 0 || libraryState.deleting} class="btn btn-secondary">
           Delete
         </button>
@@ -1203,7 +1107,7 @@
   .column-resizer {
     position: absolute;
     top: 0;
-    right: -0.25rem;
+    right: 0;
     z-index: 2;
     width: 0.5rem;
     height: 100%;
