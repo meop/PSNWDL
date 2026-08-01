@@ -22,7 +22,7 @@ const (
 	StatusNoneDownloaded Status = "none_downloaded"
 	StatusSomeDownloaded Status = "some_downloaded"
 	StatusAllDownloaded  Status = "all_downloaded"
-	StatusNoUpdates      Status = "no_updates"
+	StatusNone           Status = "none"
 	StatusUnreachable    Status = "unreachable"
 )
 
@@ -106,7 +106,7 @@ func reconcileOne(ctx context.Context, entry rpcs3.Entry, client PSNLookup, libr
 func statusForCounts(downloaded, total int) Status {
 	switch {
 	case total == 0:
-		return StatusNoUpdates
+		return StatusNone
 	case downloaded == 0:
 		return StatusNoneDownloaded
 	case downloaded < total:

@@ -472,7 +472,7 @@
 
   function applyLibraryStateToRow(row: library.Row): library.Row {
     const updates = row.updates ?? []
-    if (updates.length === 0 && row.status !== library.Status.StatusNoUpdates) return row
+    if (updates.length === 0 && row.status !== library.Status.StatusNone) return row
     const uniqueUpdates = [...new Map(updates.map((update) => [update.version, update])).values()]
     const localFiles =
       libraryState.titles.find((title) => title.mode === 'ps3' && title.title_id === row.title_id)?.files ?? []
@@ -493,7 +493,7 @@
   }
 
   function statusForDownloadCounts(downloadedCount: number, updateCount: number): library.Status {
-    if (updateCount === 0) return library.Status.StatusNoUpdates
+    if (updateCount === 0) return library.Status.StatusNone
     if (downloadedCount === 0) return library.Status.StatusNoneDownloaded
     if (downloadedCount < updateCount) return library.Status.StatusSomeDownloaded
     return library.Status.StatusAllDownloaded
@@ -588,7 +588,7 @@
   function syncActionLabel(row: library.Row): string {
     if (titleDownloadInProgress(row.title_id)) return 'Syncing'
     if (row.status === library.Status.StatusUnreachable) return 'Blocked'
-    if (row.status === library.Status.StatusAllDownloaded || row.status === library.Status.StatusNoUpdates) return 'Synced'
+    if (row.status === library.Status.StatusAllDownloaded || row.status === library.Status.StatusNone) return 'Synced'
     return 'Sync'
   }
 
@@ -682,7 +682,7 @@
     all_downloaded: 'bg-success-bg text-success-fg',
     some_downloaded: 'bg-warn-bg text-warn-fg',
     none_downloaded: 'bg-error-bg text-error-fg',
-    no_updates: 'bg-surface-2 text-muted',
+    none: 'bg-success-bg text-success-fg',
     unreachable: 'bg-error-bg text-error-fg',
   }
 
@@ -691,7 +691,7 @@
     all_downloaded: 'All downloaded',
     some_downloaded: 'Some downloaded',
     none_downloaded: 'None downloaded',
-    no_updates: 'No updates',
+    none: 'None',
     unreachable: 'Server unreachable',
   }
 </script>

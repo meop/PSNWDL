@@ -68,7 +68,7 @@ export enum Status {
     StatusNoneDownloaded = "none_downloaded",
     StatusSomeDownloaded = "some_downloaded",
     StatusAllDownloaded = "all_downloaded",
-    StatusNoUpdates = "no_updates",
+    StatusNone = "none",
     StatusUnreachable = "unreachable",
 };
 

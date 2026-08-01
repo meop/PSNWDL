@@ -8,6 +8,7 @@
   import { wireJobEvents, hydrateJobs } from './app/jobsStore.svelte'
   import { wireActivityEvents, hydrateActivityLog } from './app/activityStore.svelte'
   import { applyStartupWindowSize } from './app/windowSizing'
+  import JobQueue from './components/JobQueue.svelte'
   import Workbench from './pages/Workbench.svelte'
   import Settings from './pages/Settings.svelte'
 
@@ -27,6 +28,7 @@
   let mode = $state<Mode>(normalizeMode(bootConfig?.ui?.default_mode))
   let defaultDownload = $state<DefaultDownload>(normalizeDefaultDownload(bootConfig?.ui?.default_download))
   let overlay = $state<Overlay>(null)
+  let queueOpen = $state(false)
   const appVersion = '0.1.0'
 
   onMount(async () => {
@@ -69,6 +71,16 @@
     if (seedMode) mode = normalizeMode(cfg?.ui?.default_mode)
     defaultDownload = normalizeDefaultDownload(cfg?.ui?.default_download)
   }
+
+  function toggleQueue() {
+    overlay = null
+    queueOpen = !queueOpen
+  }
+
+  function openOverlay(next: Exclude<Overlay, null>) {
+    queueOpen = false
+    overlay = next
+  }
 </script>
 
 <div class="flex h-full flex-col">
@@ -83,10 +95,13 @@
 
     <div class="grow"></div>
 
-    <button onclick={() => (overlay = 'settings')} disabled={!booted} aria-label="Settings" class="btn btn-secondary min-h-8 min-w-8 px-2">
+    <button onclick={toggleQueue} disabled={!booted} aria-pressed={queueOpen} class="btn {queueOpen ? 'btn-primary' : 'btn-secondary'} min-h-8 min-w-8 px-2">
+      Queue
+    </button>
+    <button onclick={() => openOverlay('settings')} disabled={!booted} aria-label="Settings" class="btn btn-secondary min-h-8 min-w-8 px-2">
       Settings
     </button>
-    <button onclick={() => (overlay = 'about')} disabled={!booted} aria-label="About" class="btn btn-secondary min-h-8 min-w-8 px-2">
+    <button onclick={() => openOverlay('about')} disabled={!booted} aria-label="About" class="btn btn-secondary min-h-8 min-w-8 px-2">
       About
     </button>
   </header>
@@ -101,6 +116,19 @@
     {/if}
   </main>
 </div>
+
+{#if queueOpen}
+  <div class="fixed inset-0 z-30">
+    <button class="absolute inset-0 cursor-default border-0 bg-transparent p-0" aria-label="Close queue" onclick={() => (queueOpen = false)}></button>
+    <section class="absolute right-3 top-14 w-[min(40rem,calc(100vw-1.5rem))] overflow-hidden rounded-lg border border-border bg-surface shadow-2xl" aria-label="Queue">
+      <div class="flex h-11 items-center justify-between border-b border-border px-3">
+        <div class="text-sm font-semibold text-fg-strong">Queue</div>
+        <button onclick={() => (queueOpen = false)} class="btn btn-secondary">Close</button>
+      </div>
+      <JobQueue />
+    </section>
+  </div>
+{/if}
 
 {#if overlay}
   <div class="fixed inset-0 z-20 flex items-start justify-center p-5">

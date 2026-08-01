@@ -92,11 +92,11 @@ module root to regenerate the TS models/bindings, then rebuild.
    job refreshes Library. Do not add file watching, periodic reconciliation, or
    cross-pane network refreshes.
 
-10. **The queue is application-wide and belongs to Activity.** Download and
-    Emulator actions share one backend queue and one concurrency limit. Show
-    only active jobs in Activity, remove them from that view at terminal state,
-    and keep history in the Activity log. Do not embed a queue table in either
-    top pane.
+10. **The queue is application-wide and has a header flyout.** Download and
+    Emulator actions share one backend queue and one concurrency limit. The
+    Queue button immediately left of Settings opens a dismissible flyout that
+    shows only active jobs and removes them at terminal state. Keep history in
+    the Activity log. Do not embed a queue table in any workbench pane.
 
 11. **Library storage has explicit content branches.** The default root is
     `~/.psnwdl/library`; files live under `<mode>/firmware/<region>/` or

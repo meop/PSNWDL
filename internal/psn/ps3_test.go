@@ -1,7 +1,6 @@
 package psn
 
 import (
-	"errors"
 	"strings"
 	"testing"
 )
@@ -123,9 +122,12 @@ func TestParsePS3VerXML_TitleMismatch(t *testing.T) {
 }
 
 func TestParsePS3VerXML_Empty(t *testing.T) {
-	_, err := parsePS3VerXML(nil, "BCUS98114")
-	if !errors.Is(err, ErrEmptyResponse) {
-		t.Errorf("expected ErrEmptyResponse, got %v", err)
+	got, err := parsePS3VerXML(nil, "BCUS98114")
+	if err != nil {
+		t.Fatalf("parse empty response: %v", err)
+	}
+	if got.ID != "BCUS98114" || len(got.Updates) != 0 {
+		t.Errorf("empty response = %+v, want title with no updates", got)
 	}
 }
 

@@ -25,8 +25,9 @@ RPCS3 `dev_hdd0/game` tree — but the PKGs themselves are unmodified.
 - **Latest firmware browser** — per-console firmware currently advertised by
   Sony's regional update lists, deduplicated by version.
 - **Shared download queue** — one application-wide concurrency limit covers
-  Download and Emulator actions. Active jobs and cancellation live in Activity;
-  packages are verified with final size/SHA-1 checks and automatic retries.
+  Download and Emulator actions. The header Queue flyout shows active jobs and
+  cancellation; packages are verified with final size/SHA-1 checks and
+  automatic retries.
 - **Library manager** — shows downloaded title updates and region-grouped
   firmware files, with checkbox deletion by branch, folder, or individual file.
 - **RPCS3 library synchronization (PS3 only)** — compares every server package
@@ -34,9 +35,8 @@ RPCS3 `dev_hdd0/game` tree — but the PKGs themselves are unmodified.
   downloaded, removes unexpected packages, and downloads missing ones.
 - **RPCS3 Library install (PS3)** — detects Library PKGs newer
   than RPCS3's installed versions and installs them in version order.
-- **Activity** — live active-job controls plus a log of every fetch, reconcile,
-  download, verify, and extract, filterable by scope (`psn` / `jobs` /
-  `library` / `pkg`).
+- **Activity** — a log of every fetch, reconcile, download, verify, and extract,
+  filterable by scope (`psn` / `jobs` / `library` / `pkg`).
 - **Light / dark / system theme** — applies live; persists in config.
 
 ---

@@ -71,7 +71,7 @@ func TestReconcilePS3UsesExactDownloadedCounts(t *testing.T) {
 		"BLES01234": StatusSomeDownloaded,
 		"NPEB00301": StatusNoneDownloaded,
 		"NPUB30528": StatusUnreachable,
-		"NPHA80100": StatusNoUpdates,
+		"NPHA80100": StatusNone,
 	}
 	for _, row := range rows {
 		if row.Status != want[row.TitleID] {
@@ -127,7 +127,7 @@ func TestStatusForCounts(t *testing.T) {
 		total      int
 		want       Status
 	}{
-		{0, 0, StatusNoUpdates},
+		{0, 0, StatusNone},
 		{0, 3, StatusNoneDownloaded},
 		{1, 3, StatusSomeDownloaded},
 		{3, 3, StatusAllDownloaded},
