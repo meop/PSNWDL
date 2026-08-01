@@ -13,8 +13,8 @@ $numericVersion = [regex]::Match($version, '^\d+\.\d+\.\d+').Value
 
 $configPath = Join-Path $repoRoot 'build/config.yml'
 $config = [System.IO.File]::ReadAllText($configPath)
-$updated = [regex]::Replace($config, '(?m)^  version: "[^"]+"$', "  version: `"$numericVersion`"")
-if ($updated -eq $config -and $config -notmatch "(?m)^  version: `"$([regex]::Escape($numericVersion))`"$") {
+$updated = [regex]::Replace($config, '(?m)^  version: "[^"]+"(?=\r?$)', "  version: `"$numericVersion`"")
+if ($updated -eq $config -and $config -notmatch "(?m)^  version: `"$([regex]::Escape($numericVersion))`"(?=\r?$)") {
     throw 'Unable to locate info.version in build/config.yml.'
 }
 [System.IO.File]::WriteAllText($configPath, $updated, [System.Text.UTF8Encoding]::new($false))
@@ -50,7 +50,7 @@ try {
 
     $nfpmPath = Join-Path $repoRoot 'build/linux/nfpm/nfpm.yaml'
     $nfpm = [System.IO.File]::ReadAllText($nfpmPath)
-    $nfpm = [regex]::Replace($nfpm, '(?m)^version: "[^"]+"$', "version: `"$version`"")
+    $nfpm = [regex]::Replace($nfpm, '(?m)^version: "[^"]+"(?=\r?$)', "version: `"$version`"")
     [System.IO.File]::WriteAllText($nfpmPath, $nfpm, [System.Text.UTF8Encoding]::new($false))
 
     foreach ($relativePath in @(
