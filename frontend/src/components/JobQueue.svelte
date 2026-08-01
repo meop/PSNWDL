@@ -1,11 +1,9 @@
 <script lang="ts">
   import { CancelJob } from '../../bindings/PSNWDL/app'
   import type * as jobs from '../../bindings/PSNWDL/internal/jobs'
-  import { jobsList } from '../app/jobsStore.svelte'
+  import { activeJobsList } from '../app/jobsStore.svelte'
 
-  const ACTIVE_JOB_STATES = new Set(['queued', 'downloading', 'paused', 'resuming', 'verifying'])
   let queueError = $state<string | null>(null)
-  let activeJobs = $derived($jobsList.filter((job) => ACTIVE_JOB_STATES.has(String(job.state))))
 
   async function cancelJob(id: string) {
     queueError = null
@@ -39,11 +37,11 @@
 </script>
 
 <div class="max-h-[calc(100vh-8rem)] overflow-auto bg-surface">
-  {#if activeJobs.length === 0}
+  {#if $activeJobsList.length === 0}
     <div class="px-4 py-6 text-center text-sm text-muted">Queue is empty</div>
   {:else}
     <div class="divide-y divide-border">
-      {#each activeJobs as job (job.id)}
+      {#each $activeJobsList as job (job.id)}
         <div class="grid grid-cols-[minmax(0,1fr)_auto_auto_auto] items-center gap-3 px-3 py-2 text-xs">
           <div class="min-w-0 truncate text-fg" title={job.title_name || job.title_id}>
             {job.title_name || job.title_id} <span class="font-mono text-muted-soft">v{job.update?.version}</span>

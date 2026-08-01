@@ -5,7 +5,7 @@
   import { Events } from '@wailsio/runtime'
   import * as config from '../bindings/PSNWDL/internal/config'
   import { theme, type Theme } from './app/theme.svelte'
-  import { wireJobEvents, hydrateJobs } from './app/jobsStore.svelte'
+  import { activeJobsList, wireJobEvents, hydrateJobs } from './app/jobsStore.svelte'
   import { wireActivityEvents, hydrateActivityLog } from './app/activityStore.svelte'
   import { applyStartupWindowSize } from './app/windowSizing'
   import JobQueue from './components/JobQueue.svelte'
@@ -96,7 +96,7 @@
     <div class="grow"></div>
 
     <button onclick={toggleQueue} disabled={!booted} aria-pressed={queueOpen} class="btn {queueOpen ? 'btn-primary' : 'btn-secondary'} min-h-8 min-w-8 px-2">
-      Queue
+      Queue ({$activeJobsList.length})
     </button>
     <button onclick={() => openOverlay('settings')} disabled={!booted} aria-label="Settings" class="btn btn-secondary min-h-8 min-w-8 px-2">
       Settings
