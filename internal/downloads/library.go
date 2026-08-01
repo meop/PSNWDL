@@ -23,7 +23,7 @@ type File struct {
 type Title struct {
 	Mode          string `json:"mode"`
 	TitleID       string `json:"title_id"`
-	Locale        string `json:"locale,omitempty"`
+	Region        string `json:"region,omitempty"`
 	Path          string `json:"path"`
 	FileCount     int    `json:"file_count"`
 	TotalSize     int64  `json:"total_size"`
@@ -46,19 +46,19 @@ func Scan(root string) ([]Title, error) {
 		if err != nil {
 			return nil, err
 		}
-		localeEntries, err := os.ReadDir(firmwareDir)
+		regionEntries, err := os.ReadDir(firmwareDir)
 		if err != nil && !errors.Is(err, fs.ErrNotExist) {
 			return nil, fmt.Errorf("read %s: %w", firmwareDir, err)
 		}
-		for _, localeEntry := range localeEntries {
-			if !localeEntry.IsDir() {
+		for _, regionEntry := range regionEntries {
+			if !regionEntry.IsDir() {
 				continue
 			}
-			firmware, scanErr := scanTitle(mode, filepath.Join(firmwareDir, localeEntry.Name()), "firmware")
+			firmware, scanErr := scanTitle(mode, filepath.Join(firmwareDir, regionEntry.Name()), "firmware")
 			if scanErr != nil {
 				return nil, scanErr
 			}
-			firmware.Locale = localeEntry.Name()
+			firmware.Region = regionEntry.Name()
 			if firmware.FileCount > 0 {
 				titles = append(titles, firmware)
 			}
@@ -96,7 +96,7 @@ func Scan(root string) ([]Title, error) {
 		if titles[i].TitleID != titles[j].TitleID {
 			return titles[i].TitleID < titles[j].TitleID
 		}
-		return titles[i].Locale < titles[j].Locale
+		return titles[i].Region < titles[j].Region
 	})
 	return titles, nil
 }

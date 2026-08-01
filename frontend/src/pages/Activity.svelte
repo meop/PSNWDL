@@ -60,6 +60,13 @@
   }
 
   const SCOPE_OPTIONS = ['all', 'psn', 'jobs', 'library', 'pkg']
+  const SCOPE_LABELS: Record<string, string> = {
+    all: 'All',
+    psn: 'PSN',
+    jobs: 'Jobs',
+    library: 'Library',
+    pkg: 'PKG',
+  }
 
   let filteredEntries = $derived(
     logEntries.filter((entry) => selectedScope === 'all' || entry.scope === selectedScope)
@@ -92,7 +99,7 @@
   <div class="{embedded ? 'mb-0 border-b border-border px-3 py-2' : 'page-header'} flex items-center justify-between gap-3">
     <div>
       <h1 class="{embedded ? 'text-sm font-semibold text-fg-strong' : 'page-title'}">Activity</h1>
-      <p class="mt-1 text-xs text-muted">PSN, jobs, library, and package operations</p>
+      <p class="mt-1 text-xs text-muted">PSN, jobs, library, and PKG operations</p>
     </div>
     <div class="flex items-center gap-2">
       <button onclick={() => (paused = !paused)} class="btn btn-secondary">
@@ -132,7 +139,7 @@
         onclick={() => (selectedScope = scope)}
         class="btn {selectedScope === scope ? 'btn-primary' : 'btn-secondary'}"
       >
-        {scope.charAt(0).toUpperCase() + scope.slice(1)}
+        {SCOPE_LABELS[scope] ?? scope}
       </button>
     {/each}
   </div>

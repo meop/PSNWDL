@@ -31,7 +31,7 @@ type Job struct {
 	TitleID     string     `json:"title_id"`
 	TitleName   string     `json:"title_name,omitempty"`
 	Mode        string     `json:"mode"`
-	Locale      string     `json:"locale,omitempty"`
+	Region      string     `json:"region,omitempty"`
 	Kind        string     `json:"kind,omitempty"`
 	Update      psn.Update `json:"update"`
 	DestPath    string     `json:"dest_path"`
@@ -49,7 +49,7 @@ type Request struct {
 	TitleID   string     `json:"title_id"`
 	TitleName string     `json:"title_name,omitempty"`
 	Mode      string     `json:"mode"`
-	Locale    string     `json:"locale,omitempty"`
+	Region    string     `json:"region,omitempty"`
 	Kind      string     `json:"kind,omitempty"`
 	Update    psn.Update `json:"update"`
 }

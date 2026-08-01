@@ -39,7 +39,7 @@ export class File {
 export class Title {
     "mode": string;
     "title_id": string;
-    "locale"?: string;
+    "region"?: string;
     "path": string;
     "file_count": number;
     "total_size": number;

@@ -17,7 +17,7 @@ export class Job {
     "title_id": string;
     "title_name"?: string;
     "mode": string;
-    "locale"?: string;
+    "region"?: string;
     "kind"?: string;
     "update": psn$0.Update;
     "dest_path": string;
@@ -92,7 +92,7 @@ export class Request {
     "title_id": string;
     "title_name"?: string;
     "mode": string;
-    "locale"?: string;
+    "region"?: string;
     "kind"?: string;
     "update": psn$0.Update;
 

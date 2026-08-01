@@ -37,8 +37,8 @@ func TestScanUsesFirmwareAndTitleBranches(t *testing.T) {
 	if byID["firmware"].Path != firmwareDir {
 		t.Errorf("firmware title = %+v", byID["firmware"])
 	}
-	if byID["firmware"].Locale != "us" {
-		t.Errorf("firmware locale = %q, want us", byID["firmware"].Locale)
+	if byID["firmware"].Region != "us" {
+		t.Errorf("firmware region = %q, want us", byID["firmware"].Region)
 	}
 	if byID["BCUS98114"].Path != titleDir {
 		t.Errorf("download title = %+v", byID["BCUS98114"])

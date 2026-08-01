@@ -168,7 +168,7 @@ func (q *Queue) Enqueue(parent context.Context, req Request) (string, error) {
 		TitleID:   req.TitleID,
 		TitleName: req.TitleName,
 		Mode:      req.Mode,
-		Locale:    req.Locale,
+		Region:    req.Region,
 		Kind:      kind,
 		Update:    req.Update,
 		DestPath:  dest,
@@ -692,18 +692,18 @@ func (q *Queue) destinationPath(req Request) (string, error) {
 	var dir string
 	if kind == KindFirmware {
 		ext = ".pup"
-		locale := strings.ToLower(strings.TrimSpace(req.Locale))
-		if locale == "" {
-			return "", errors.New("firmware request missing locale")
+		region := strings.ToLower(strings.TrimSpace(req.Region))
+		if region == "" {
+			return "", errors.New("firmware request missing region")
 		}
-		if strings.ContainsAny(locale, `\\/:*?"<>|`) || locale == "." || locale == ".." {
-			return "", fmt.Errorf("firmware request has invalid locale %q", req.Locale)
+		if strings.ContainsAny(region, `\\/:*?"<>|`) || region == "." || region == ".." {
+			return "", fmt.Errorf("firmware request has invalid region %q", req.Region)
 		}
 		firmwareRoot, firmwareErr := config.FirmwareDirForRoot(libraryDir, req.Mode)
 		if firmwareErr != nil {
 			return "", firmwareErr
 		}
-		dir = filepath.Join(firmwareRoot, locale)
+		dir = filepath.Join(firmwareRoot, region)
 	} else {
 		titleRoot, titleErr := config.TitleDirForRoot(libraryDir, req.Mode)
 		if titleErr != nil {

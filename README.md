@@ -27,12 +27,12 @@ RPCS3 `dev_hdd0/game` tree — but the PKGs themselves are unmodified.
 - **Shared download queue** — one application-wide concurrency limit covers
   Download and Emulator actions. Active jobs and cancellation live in Activity;
   packages are verified with final size/SHA-1 checks and automatic retries.
-- **Library manager** — shows downloaded title updates and locale-grouped
+- **Library manager** — shows downloaded title updates and region-grouped
   firmware files, with checkbox deletion by branch, folder, or individual file.
 - **RPCS3 library synchronization (PS3 only)** — compares every server package
   for each RPCS3 title with the download library, reports none/some/all
   downloaded, removes unexpected packages, and downloads missing ones.
-- **RPCS3 Library install (PS3)** — detects downloaded Library packages newer
+- **RPCS3 Library install (PS3)** — detects Library PKGs newer
   than RPCS3's installed versions and installs them in version order.
 - **Activity** — live active-job controls plus a log of every fetch, reconcile,
   download, verify, and extract, filterable by scope (`psn` / `jobs` /
@@ -62,7 +62,7 @@ activity log, and RPCS3 reconcile/download/install flow.
 | Fixed cache/library view | No | No | Yes |
 | RPCS3 installed-title reconcile | Partial | No | Yes |
 | Queue missing RPCS3 updates | Partial | No | Yes |
-| Install downloaded Library PS3 PKGs | No | Yes | Yes |
+| Install Library PS3 PKGs | No | Yes | Yes |
 | PARAM.SFO metadata parsing | No | Yes | Yes |
 | Retail/debug PS3 NPDRM extraction | No | Yes | Yes |
 | Folder naming format options | Yes | No | No; fixed cache layout by design |
@@ -181,7 +181,7 @@ normal desktop validation.
 ### Cache layout
 
 Downloaded files are separated by platform and content type. Firmware is grouped
-by locale under `firmware`; title updates are grouped by title ID under `title`:
+by region under `firmware`; title updates are grouped by title ID under `title`:
 
 ```
 ~/.psnwdl/library/
@@ -189,7 +189,7 @@ by locale under `firmware`; title updates are grouped by title ID under `title`:
 │   ├── firmware/us/firmware_4.93.pup
 │   └── title/BCUS98114/BCUS98114_01.05.pkg
 ├── ps4/
-│   ├── firmware/<locale>/<firmware>.pup
+│   ├── firmware/<region>/<firmware>.pup
 │   └── title/CUSA00000/<update>.pkg
 ├── ps5/firmware/us/firmware_26.04-13.40.00.pup
 └── …

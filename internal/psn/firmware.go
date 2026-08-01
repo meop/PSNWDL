@@ -15,7 +15,7 @@ import (
 
 // FirmwareEntry describes a single firmware PUP available from Sony's CDN.
 type FirmwareEntry struct {
-	Locale  string `json:"locale"`
+	Region  string `json:"region"`
 	Type    string `json:"type,omitempty"`
 	Version string `json:"version"`
 	URL     string `json:"url"`
@@ -24,35 +24,35 @@ type FirmwareEntry struct {
 }
 
 // FirmwareList is the merged, deduplicated result of a firmware lookup across
-// all locales for one console.
+// all regions for one console.
 type FirmwareList struct {
 	Console string          `json:"console"` // "ps3" | "ps4" | "ps5" | "psvita"
 	Entries []FirmwareEntry `json:"entries"`
 }
 
-// firmwareLocales is the set of locale codes Sony supports for firmware
-// distribution.  Mirrored from PySN.py's locale_list.
-var firmwareLocales = []string{"us", "eu", "jp", "kr", "uk", "mx", "au", "sa", "tw", "ru", "cn", "br"}
+// firmwareRegions is the set of region codes Sony supports for firmware
+// distribution. Mirrored from PySN.py's supported region list.
+var firmwareRegions = []string{"us", "eu", "jp", "kr", "uk", "mx", "au", "sa", "tw", "ru", "cn", "br"}
 
 // ---- PS3 firmware (TXT format) ----
 
 const ps3FirmwareEndpoint = "https://f%s01.ps3.update.playstation.net/update/ps3/list/%s/ps3-updatelist.txt"
 
-// LookupPS3Firmware fetches PS3 firmware listings from all locales.
+// LookupPS3Firmware fetches PS3 firmware listings from all regions.
 func (c *Client) LookupPS3Firmware(ctx context.Context) (*FirmwareList, error) {
 	list := &FirmwareList{Console: "ps3"}
-	c.activity.Infof("psn", "PS3 firmware: fanning out across %d locales", len(firmwareLocales))
+	c.activity.Infof("psn", "PS3 firmware: fanning out across %d regions", len(firmwareRegions))
 
-	results := c.fetchFirmwareLocales(ctx, "PS3", func(locale string) ([]FirmwareEntry, error) {
-		return c.fetchPS3FirmwareTXT(ctx, fmt.Sprintf(ps3FirmwareEndpoint, locale, locale), locale)
+	results := c.fetchFirmwareRegions(ctx, "PS3", func(region string) ([]FirmwareEntry, error) {
+		return c.fetchPS3FirmwareTXT(ctx, fmt.Sprintf(ps3FirmwareEndpoint, region, region), region)
 	})
 	for _, result := range results {
 		if result.err != nil {
-			// A locale being unavailable is expected — skip and continue.
-			c.activity.Warnf("psn", "PS3 firmware %s: unreachable (%v)", result.locale, result.err)
+			// A region being unavailable is expected — skip and continue.
+			c.activity.Warnf("psn", "PS3 firmware %s: unreachable (%v)", result.region, result.err)
 			continue
 		}
-		c.activity.Infof("psn", "PS3 firmware %s: %d entr%s", result.locale, len(result.entries), pluralY(len(result.entries)))
+		c.activity.Infof("psn", "PS3 firmware %s: %d entr%s", result.region, len(result.entries), pluralY(len(result.entries)))
 		list.Entries = append(list.Entries, result.entries...)
 	}
 	sortFirmwareEntries(list.Entries)
@@ -61,7 +61,7 @@ func (c *Client) LookupPS3Firmware(ctx context.Context) (*FirmwareList, error) {
 	return list, nil
 }
 
-func (c *Client) fetchPS3FirmwareTXT(ctx context.Context, url, locale string) ([]FirmwareEntry, error) {
+func (c *Client) fetchPS3FirmwareTXT(ctx context.Context, url, region string) ([]FirmwareEntry, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err
@@ -78,7 +78,7 @@ func (c *Client) fetchPS3FirmwareTXT(ctx context.Context, url, locale string) ([
 	if err != nil {
 		return nil, err
 	}
-	entries, err := parsePS3FirmwareTXT(body, locale)
+	entries, err := parsePS3FirmwareTXT(body, region)
 	if err != nil {
 		return nil, err
 	}
@@ -94,7 +94,7 @@ func (c *Client) fetchPS3FirmwareTXT(ctx context.Context, url, locale string) ([
 //	SystemSoftwarePackageUrl=https://… or CDN=http://.../PS3UPDAT.PUP
 //
 // SHA-1 is not published in this file; size must be resolved by a HEAD/GET.
-func parsePS3FirmwareTXT(body []byte, locale string) ([]FirmwareEntry, error) {
+func parsePS3FirmwareTXT(body []byte, region string) ([]FirmwareEntry, error) {
 	var entries []FirmwareEntry
 
 	scanner := bufio.NewScanner(bytes.NewReader(body))
@@ -135,7 +135,7 @@ func parsePS3FirmwareTXT(body []byte, locale string) ([]FirmwareEntry, error) {
 			continue
 		}
 		entries = append(entries, FirmwareEntry{
-			Locale:  locale,
+			Region:  region,
 			Type:    "Firmware",
 			Version: ver,
 			URL:     dlURL,
@@ -175,18 +175,18 @@ func normalisePS3Version(raw string) string {
 
 const ps4FirmwareEndpoint = "https://f%s01.ps4.update.playstation.net/update/ps4/list/%s/ps4-updatelist.xml"
 
-// LookupPS4Firmware fetches PS4 firmware listings from all locales.
+// LookupPS4Firmware fetches PS4 firmware listings from all regions.
 func (c *Client) LookupPS4Firmware(ctx context.Context) (*FirmwareList, error) {
 	return c.lookupXMLFirmware(ctx, "ps4", ps4FirmwareEndpoint, "")
 }
 
-// LookupPS5Firmware fetches PS5 firmware listings from all locales. The PS5
+// LookupPS5Firmware fetches PS5 firmware listings from all regions. The PS5
 // endpoint embeds an obfuscation token.
 func (c *Client) LookupPS5Firmware(ctx context.Context) (*FirmwareList, error) {
 	return c.lookupXMLFirmware(ctx, "ps5", ps5FirmwareEndpoint, ps5FirmwareToken)
 }
 
-// LookupVitaFirmware fetches PSVita firmware listings from all locales.
+// LookupVitaFirmware fetches PSVita firmware listings from all regions.
 func (c *Client) LookupVitaFirmware(ctx context.Context) (*FirmwareList, error) {
 	return c.lookupXMLFirmware(ctx, "psvita", vitaFirmwareEndpoint, "")
 }
@@ -196,23 +196,23 @@ func (c *Client) LookupVitaFirmware(ctx context.Context) (*FirmwareList, error) 
 // obfuscation token into the endpoint.
 func (c *Client) lookupXMLFirmware(ctx context.Context, console, endpoint, token string) (*FirmwareList, error) {
 	list := &FirmwareList{Console: console}
-	c.activity.Infof("psn", "%s firmware: fanning out across %d locales", console, len(firmwareLocales))
+	c.activity.Infof("psn", "%s firmware: fanning out across %d regions", console, len(firmwareRegions))
 
-	results := c.fetchFirmwareLocales(ctx, console, func(locale string) ([]FirmwareEntry, error) {
+	results := c.fetchFirmwareRegions(ctx, console, func(region string) ([]FirmwareEntry, error) {
 		var url string
 		if token != "" {
-			url = fmt.Sprintf(endpoint, locale, token, locale)
+			url = fmt.Sprintf(endpoint, region, token, region)
 		} else {
-			url = fmt.Sprintf(endpoint, locale, locale)
+			url = fmt.Sprintf(endpoint, region, region)
 		}
-		return c.fetchFirmwareXML(ctx, url, locale, console)
+		return c.fetchFirmwareXML(ctx, url, region, console)
 	})
 	for _, result := range results {
 		if result.err != nil {
-			c.activity.Warnf("psn", "%s firmware %s: unreachable (%v)", console, result.locale, result.err)
+			c.activity.Warnf("psn", "%s firmware %s: unreachable (%v)", console, result.region, result.err)
 			continue
 		}
-		c.activity.Infof("psn", "%s firmware %s: %d entr%s", console, result.locale, len(result.entries), pluralY(len(result.entries)))
+		c.activity.Infof("psn", "%s firmware %s: %d entr%s", console, result.region, len(result.entries), pluralY(len(result.entries)))
 		list.Entries = append(list.Entries, result.entries...)
 	}
 	sortFirmwareEntries(list.Entries)
@@ -221,27 +221,27 @@ func (c *Client) lookupXMLFirmware(ctx context.Context, console, endpoint, token
 	return list, nil
 }
 
-type firmwareLocaleResult struct {
+type firmwareRegionResult struct {
 	index   int
-	locale  string
+	region  string
 	entries []FirmwareEntry
 	err     error
 }
 
-func (c *Client) fetchFirmwareLocales(ctx context.Context, console string, fetch func(locale string) ([]FirmwareEntry, error)) []firmwareLocaleResult {
-	results := make([]firmwareLocaleResult, len(firmwareLocales))
+func (c *Client) fetchFirmwareRegions(ctx context.Context, console string, fetch func(region string) ([]FirmwareEntry, error)) []firmwareRegionResult {
+	results := make([]firmwareRegionResult, len(firmwareRegions))
 	var wg sync.WaitGroup
-	for i, locale := range firmwareLocales {
-		i, locale := i, locale
-		results[i] = firmwareLocaleResult{index: i, locale: locale}
+	for i, region := range firmwareRegions {
+		i, region := i, region
+		results[i] = firmwareRegionResult{index: i, region: region}
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			c.activity.Infof("psn", "%s firmware %s: fetching", console, locale)
-			entries, err := fetch(locale)
-			results[i] = firmwareLocaleResult{
+			c.activity.Infof("psn", "%s firmware %s: fetching", console, region)
+			entries, err := fetch(region)
+			results[i] = firmwareRegionResult{
 				index:   i,
-				locale:  locale,
+				region:  region,
 				entries: entries,
 				err:     err,
 			}
@@ -254,8 +254,8 @@ func (c *Client) fetchFirmwareLocales(ctx context.Context, console string, fetch
 
 func sortFirmwareEntries(entries []FirmwareEntry) {
 	sort.SliceStable(entries, func(i, j int) bool {
-		if entries[i].Locale != entries[j].Locale {
-			return entries[i].Locale < entries[j].Locale
+		if entries[i].Region != entries[j].Region {
+			return entries[i].Region < entries[j].Region
 		}
 		if entries[i].Type != entries[j].Type {
 			return entries[i].Type < entries[j].Type
@@ -275,7 +275,7 @@ func pluralY(n int) string {
 // ---- PS5 firmware (XML format with obfuscation token) ----
 
 // PS5 firmware URL embeds the fixed obfuscation token (defined in ps5.go).
-// Pattern: http://f{locale}01.ps5.update.playstation.net/update/ps5/official/{token}/list/{locale}/updatelist.xml
+// Pattern: http://f{region}01.ps5.update.playstation.net/update/ps5/official/{token}/list/{region}/updatelist.xml
 const ps5FirmwareEndpoint = "http://f%s01.ps5.update.playstation.net/update/ps5/official/%s/list/%s/updatelist.xml"
 
 // ---- PSVita firmware (XML format) ----
@@ -333,7 +333,7 @@ type fwRecovery struct {
 	Image    fwImage `xml:"image"`
 }
 
-func (c *Client) fetchFirmwareXML(ctx context.Context, url, locale, console string) ([]FirmwareEntry, error) {
+func (c *Client) fetchFirmwareXML(ctx context.Context, url, region, console string) ([]FirmwareEntry, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err
@@ -350,7 +350,7 @@ func (c *Client) fetchFirmwareXML(ctx context.Context, url, locale, console stri
 	if err != nil {
 		return nil, err
 	}
-	entries, err := parseFirmwareXML(body, locale)
+	entries, err := parseFirmwareXML(body, region)
 	if err != nil {
 		return nil, err
 	}
@@ -397,7 +397,7 @@ func (c *Client) contentLength(ctx context.Context, url string) int64 {
 
 // parseFirmwareXML parses a PS4/PS5/PSVita firmware XML document.
 // The URL text may have trailing whitespace; it is trimmed.
-func parseFirmwareXML(body []byte, locale string) ([]FirmwareEntry, error) {
+func parseFirmwareXML(body []byte, region string) ([]FirmwareEntry, error) {
 	if len(body) == 0 {
 		return nil, nil
 	}
@@ -408,38 +408,38 @@ func parseFirmwareXML(body []byte, locale string) ([]FirmwareEntry, error) {
 	}
 
 	var entries []FirmwareEntry
-	for _, region := range list.Regions {
-		entryLocale := locale
-		if region.ID != "" {
-			entryLocale = region.ID
+	for _, xmlRegion := range list.Regions {
+		entryRegion := region
+		if xmlRegion.ID != "" {
+			entryRegion = xmlRegion.ID
 		}
 
-		for _, pup := range region.SystemPUPs {
+		for _, pup := range xmlRegion.SystemPUPs {
 			ver := firmwareVersionLabel(pup)
 			for _, upd := range pup.Updates {
-				if e, ok := firmwareEntry(entryLocale, firmwareType(upd.UpdateType), ver, upd.Image); ok {
+				if e, ok := firmwareEntry(entryRegion, firmwareType(upd.UpdateType), ver, upd.Image); ok {
 					entries = append(entries, e)
 				}
 			}
 		}
 
-		for _, recovery := range region.RecoveryPUPs {
-			if e, ok := firmwareEntry(entryLocale, firmwareType(recovery.Type), firmwareVersionLabel(recovery.SystemPUP), recovery.Image); ok {
+		for _, recovery := range xmlRegion.RecoveryPUPs {
+			if e, ok := firmwareEntry(entryRegion, firmwareType(recovery.Type), firmwareVersionLabel(recovery.SystemPUP), recovery.Image); ok {
 				entries = append(entries, e)
 			}
 		}
 
-		for _, version := range region.Versions {
+		for _, version := range xmlRegion.Versions {
 			ver := strings.TrimSpace(version.Label)
 			for _, upd := range version.Updates {
-				if e, ok := firmwareEntry(entryLocale, firmwareType(upd.UpdateType), ver, upd.Image); ok {
+				if e, ok := firmwareEntry(entryRegion, firmwareType(upd.UpdateType), ver, upd.Image); ok {
 					entries = append(entries, e)
 				}
 			}
 		}
 
-		for _, recovery := range region.Recoveries {
-			if e, ok := firmwareEntry(entryLocale, firmwareType(recovery.SPKGType), "", recovery.Image); ok {
+		for _, recovery := range xmlRegion.Recoveries {
+			if e, ok := firmwareEntry(entryRegion, firmwareType(recovery.SPKGType), "", recovery.Image); ok {
 				entries = append(entries, e)
 			}
 		}
@@ -448,7 +448,7 @@ func parseFirmwareXML(body []byte, locale string) ([]FirmwareEntry, error) {
 	return entries, nil
 }
 
-func firmwareEntry(locale, typ, version string, image fwImage) (FirmwareEntry, bool) {
+func firmwareEntry(region, typ, version string, image fwImage) (FirmwareEntry, bool) {
 	rawURL := strings.TrimSpace(image.URL)
 	if rawURL == "" {
 		return FirmwareEntry{}, false
@@ -460,7 +460,7 @@ func firmwareEntry(locale, typ, version string, image fwImage) (FirmwareEntry, b
 		version = imageVersionFallback(rawURL)
 	}
 	return FirmwareEntry{
-		Locale:  locale,
+		Region:  region,
 		Type:    typ,
 		Version: version,
 		URL:     rawURL,

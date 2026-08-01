@@ -27,8 +27,8 @@ func TestParsePS3FirmwareTXT_Simple(t *testing.T) {
 		t.Fatalf("entries len = %d, want 1", len(entries))
 	}
 	e := entries[0]
-	if e.Locale != "us" {
-		t.Errorf("Locale = %q, want us", e.Locale)
+	if e.Region != "us" {
+		t.Errorf("Region = %q, want us", e.Region)
 	}
 	if e.Version != "4.90" {
 		t.Errorf("Version = %q, want 4.90", e.Version)
@@ -113,8 +113,8 @@ func TestParseFirmwareXML_PS4(t *testing.T) {
 		t.Fatalf("entries len = %d, want 2", len(entries))
 	}
 	e := entries[0]
-	if e.Locale != "us" {
-		t.Errorf("Locale = %q, want us", e.Locale)
+	if e.Region != "us" {
+		t.Errorf("Region = %q, want us", e.Region)
 	}
 	if e.Version != "13.52" {
 		t.Errorf("Version = %q, want 13.52", e.Version)
@@ -211,17 +211,17 @@ func TestPS5FirmwareToken(t *testing.T) {
 	}
 }
 
-// TestFirmwareLocales verifies the locale list is populated and includes the
+// TestFirmwareRegions verifies the region list is populated and includes the
 // primary regions used by Sony.
-func TestFirmwareLocales(t *testing.T) {
+func TestFirmwareRegions(t *testing.T) {
 	required := []string{"us", "eu", "jp"}
-	localeSet := make(map[string]struct{}, len(firmwareLocales))
-	for _, l := range firmwareLocales {
-		localeSet[l] = struct{}{}
+	regionSet := make(map[string]struct{}, len(firmwareRegions))
+	for _, region := range firmwareRegions {
+		regionSet[region] = struct{}{}
 	}
-	for _, r := range required {
-		if _, ok := localeSet[r]; !ok {
-			t.Errorf("firmwareLocales missing required locale %q", r)
+	for _, region := range required {
+		if _, ok := regionSet[region]; !ok {
+			t.Errorf("firmwareRegions missing required region %q", region)
 		}
 	}
 }

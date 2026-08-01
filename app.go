@@ -245,7 +245,7 @@ func (a *App) SearchVita(tid string) (*psn.Title, error) {
 	return a.psn.LookupVita(a.ctx, tid)
 }
 
-// ListFirmware fetches the locale-fanned firmware list for the given mode.
+// ListFirmware fetches the region-fanned firmware list for the given mode.
 // Modes: "ps3" | "ps4" | "ps5" | "psvita".
 func (a *App) ListFirmware(mode string) (*psn.FirmwareList, error) {
 	switch mode {
@@ -316,8 +316,8 @@ func (a *App) ReconcileTitlePS3(entry rpcs3.Entry) library.Row {
 	return row
 }
 
-// SyncTitlePS3 makes one RPCS3 title folder exactly match the packages
-// advertised by the server: extras are removed and missing packages queued.
+// SyncTitlePS3 makes one RPCS3 title folder exactly match the PKGs advertised
+// by the server: extras are removed and missing PKGs queued.
 func (a *App) SyncTitlePS3(tid string) ([]string, error) {
 	entries, err := a.ListRPCS3Library()
 	if err != nil {
@@ -389,7 +389,7 @@ func (a *App) syncRPCS3Title(entry rpcs3.Entry) ([]string, error) {
 		}
 		jobIDs = append(jobIDs, jobID)
 	}
-	a.activity.Infof("library", "%s: sync queued %d missing package(s)", entry.TitleID, len(jobIDs))
+	a.activity.Infof("library", "%s: sync queued %d missing PKG(s)", entry.TitleID, len(jobIDs))
 	return jobIDs, nil
 }
 
@@ -476,15 +476,17 @@ func (a *App) OpenFolder(path string) error {
 	return cmd.Start()
 }
 
-func (a *App) PendingLibraryInstallsPS3() (int, error) {
-	pkgs, err := a.pendingLibraryPackagesPS3()
+// PendingLibraryPKGsPS3 returns the number of Library PKGs newer than their
+// installed RPCS3 versions.
+func (a *App) PendingLibraryPKGsPS3() (int, error) {
+	pkgs, err := a.pendingLibraryPKGsPS3()
 	return len(pkgs), err
 }
 
-// InstallLibraryPS3 installs only downloaded Library packages newer than the
+// InstallLibraryPKGsPS3 installs only Library PKGs newer than the
 // version currently present in RPCS3.
-func (a *App) InstallLibraryPS3() (int, error) {
-	pkgs, err := a.pendingLibraryPackagesPS3()
+func (a *App) InstallLibraryPKGsPS3() (int, error) {
+	pkgs, err := a.pendingLibraryPKGsPS3()
 	if err != nil {
 		return 0, err
 	}
@@ -502,25 +504,25 @@ func (a *App) InstallLibraryPS3() (int, error) {
 		}
 		titleID := group[0].TitleID
 		a.activity.Infof("pkg", "Installing %d Library PKG(s) for %s", len(group), titleID)
-		for _, packageInfo := range group {
-			a.activity.Infof("pkg", "Installing %s v%s", packageInfo.Title, packageInfo.AppVer)
-			info, extractErr := pkg.Extract(packageInfo.Path, hdd0Game)
+		for _, pkgInfo := range group {
+			a.activity.Infof("pkg", "Installing %s v%s", pkgInfo.Title, pkgInfo.AppVer)
+			info, extractErr := pkg.Extract(pkgInfo.Path, hdd0Game)
 			if extractErr != nil {
-				a.activity.Errorf("pkg", "Failed to install %s v%s: %v (skipping remaining versions for this title)", packageInfo.Title, packageInfo.AppVer, extractErr)
+				a.activity.Errorf("pkg", "Failed to install %s v%s: %v (skipping remaining versions for this title)", pkgInfo.Title, pkgInfo.AppVer, extractErr)
 				if installErr == nil {
-					installErr = fmt.Errorf("install %s v%s: %w", packageInfo.TitleID, packageInfo.AppVer, extractErr)
+					installErr = fmt.Errorf("install %s v%s: %w", pkgInfo.TitleID, pkgInfo.AppVer, extractErr)
 				}
 				break
 			}
 			installed++
-			a.activity.Infof("pkg", "Successfully installed %s v%s to %s", packageInfo.Title, packageInfo.AppVer, filepath.Join(hdd0Game, info.TitleID))
+			a.activity.Infof("pkg", "Successfully installed %s v%s to %s", pkgInfo.Title, pkgInfo.AppVer, filepath.Join(hdd0Game, info.TitleID))
 		}
 	}
-	a.activity.Infof("pkg", "Library install complete: %d package(s) installed", installed)
+	a.activity.Infof("pkg", "Library install complete: %d PKG(s) installed", installed)
 	return installed, installErr
 }
 
-func (a *App) pendingLibraryPackagesPS3() ([]pkg.DiscoveredPKG, error) {
+func (a *App) pendingLibraryPKGsPS3() ([]pkg.DiscoveredPKG, error) {
 	hdd0Game := strings.TrimSpace(a.cfg.RPCS3.HDD0Game)
 	if hdd0Game == "" {
 		return nil, fmt.Errorf("dev_hdd0/game path not set")
@@ -545,22 +547,22 @@ func (a *App) pendingLibraryPackagesPS3() ([]pkg.DiscoveredPKG, error) {
 	installedVersions := make(map[string]string)
 	seenVersions := make(map[string]struct{})
 	pending := make([]pkg.DiscoveredPKG, 0, len(pkgs))
-	for _, packageInfo := range pkgs {
-		installedVersion, found := installedVersions[packageInfo.TitleID]
+	for _, pkgInfo := range pkgs {
+		installedVersion, found := installedVersions[pkgInfo.TitleID]
 		if !found {
-			installedVersion, err = library.InstalledVersion(hdd0Game, packageInfo.TitleID)
+			installedVersion, err = library.InstalledVersion(hdd0Game, pkgInfo.TitleID)
 			if err != nil {
-				return nil, fmt.Errorf("read installed version for %s: %w", packageInfo.TitleID, err)
+				return nil, fmt.Errorf("read installed version for %s: %w", pkgInfo.TitleID, err)
 			}
-			installedVersions[packageInfo.TitleID] = installedVersion
+			installedVersions[pkgInfo.TitleID] = installedVersion
 		}
-		if library.PackageNeedsInstall(packageInfo.AppVer, installedVersion) {
-			key := packageInfo.TitleID + "\x00" + packageInfo.AppVer
+		if library.PackageNeedsInstall(pkgInfo.AppVer, installedVersion) {
+			key := pkgInfo.TitleID + "\x00" + pkgInfo.AppVer
 			if _, exists := seenVersions[key]; exists {
 				continue
 			}
 			seenVersions[key] = struct{}{}
-			pending = append(pending, packageInfo)
+			pending = append(pending, pkgInfo)
 		}
 	}
 	return pending, nil

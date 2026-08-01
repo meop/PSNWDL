@@ -9,7 +9,7 @@ import { Create as $Create } from "@wailsio/runtime";
  * FirmwareEntry describes a single firmware PUP available from Sony's CDN.
  */
 export class FirmwareEntry {
-    "locale": string;
+    "region": string;
     "type"?: string;
     "version": string;
     "url": string;
@@ -18,8 +18,8 @@ export class FirmwareEntry {
 
     /** Creates a new FirmwareEntry instance. */
     constructor($$source: Partial<FirmwareEntry> = {}) {
-        if (!("locale" in $$source)) {
-            this["locale"] = "";
+        if (!("region" in $$source)) {
+            this["region"] = "";
         }
         if (!("version" in $$source)) {
             this["version"] = "";
@@ -42,7 +42,7 @@ export class FirmwareEntry {
 
 /**
  * FirmwareList is the merged, deduplicated result of a firmware lookup across
- * all locales for one console.
+ * all regions for one console.
  */
 export class FirmwareList {
     /**

@@ -40,7 +40,7 @@ module root to regenerate the TS models/bindings, then rebuild.
 ## Load-bearing invariants (breaking these is a regression)
 
 1. **No download ever auto-installs.** Installing is always a separate explicit
-   user click (`App.InstallLibraryPS3`) and only considers packages in PSNWDL's
+   user click (`App.InstallLibraryPKGsPS3`) and only considers PKGs in PSNWDL's
    own Library. Do not re-add arbitrary-folder installation, an auto-install
    flag to `jobs.Request`/`Job`, or a post-verify install block in `queue.run`.
 
@@ -97,7 +97,7 @@ module root to regenerate the TS models/bindings, then rebuild.
     top pane.
 
 11. **Library storage has explicit content branches.** The default root is
-    `~/.psnwdl/library`; files live under `<mode>/firmware/<locale>/` or
+    `~/.psnwdl/library`; files live under `<mode>/firmware/<region>/` or
     `<mode>/title/<TitleID>/`. Keep download destinations, scanning,
     synchronization, Library actions, and documentation on this layout. The app
     is unreleased, so do not add schema migrations or legacy-layout handling.

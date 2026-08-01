@@ -72,11 +72,11 @@ export function GetConfig(): $CancellablePromise<config$0.Config> {
 }
 
 /**
- * InstallLibraryPS3 installs only downloaded Library packages newer than the
+ * InstallLibraryPKGsPS3 installs only Library PKGs newer than the
  * version currently present in RPCS3.
  */
-export function InstallLibraryPS3(): $CancellablePromise<number> {
-    return $Call.ByID(2374068087);
+export function InstallLibraryPKGsPS3(): $CancellablePromise<number> {
+    return $Call.ByID(2930352174);
 }
 
 export function ListDownloadLibrary(): $CancellablePromise<downloads$0.Title[]> {
@@ -86,7 +86,7 @@ export function ListDownloadLibrary(): $CancellablePromise<downloads$0.Title[]> 
 }
 
 /**
- * ListFirmware fetches the locale-fanned firmware list for the given mode.
+ * ListFirmware fetches the region-fanned firmware list for the given mode.
  * Modes: "ps3" | "ps4" | "ps5" | "psvita".
  */
 export function ListFirmware(mode: string): $CancellablePromise<psn$0.FirmwareList | null> {
@@ -127,8 +127,12 @@ export function PauseJob(id: string): $CancellablePromise<void> {
     return $Call.ByID(1505341468, id);
 }
 
-export function PendingLibraryInstallsPS3(): $CancellablePromise<number> {
-    return $Call.ByID(4236031259);
+/**
+ * PendingLibraryPKGsPS3 returns the number of Library PKGs newer than their
+ * installed RPCS3 versions.
+ */
+export function PendingLibraryPKGsPS3(): $CancellablePromise<number> {
+    return $Call.ByID(1032921658);
 }
 
 export function PickDirectory(title: string, defaultDirectory: string): $CancellablePromise<string> {
@@ -193,8 +197,8 @@ export function SyncAllPS3(): $CancellablePromise<string[]> {
 }
 
 /**
- * SyncTitlePS3 makes one RPCS3 title folder exactly match the packages
- * advertised by the server: extras are removed and missing packages queued.
+ * SyncTitlePS3 makes one RPCS3 title folder exactly match the PKGs advertised
+ * by the server: extras are removed and missing PKGs queued.
  */
 export function SyncTitlePS3(tid: string): $CancellablePromise<string[]> {
     return $Call.ByID(2047523786, tid).then(($result: any) => {

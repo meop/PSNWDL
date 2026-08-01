@@ -5,11 +5,11 @@
     AutoDetectGamesYML,
     DeleteLibraryItems,
     EnqueueDownload,
-    InstallLibraryPS3,
+    InstallLibraryPKGsPS3,
     ListDownloadLibrary,
     ListRPCS3Library,
     OpenFolder,
-    PendingLibraryInstallsPS3,
+    PendingLibraryPKGsPS3,
     ReconcileTitlePS3,
     SearchPS3,
     SearchPS4,
@@ -57,10 +57,10 @@
   let emulatorError = $state<string | null>(null)
   let syncingAll = $state(false)
   let emulatorSyncJobIDs = $state<string[]>([])
-  let installingDownloads = $state(false)
-  let pendingInstallCount = $state(0)
-  let pendingInstallError = $state<string | null>(null)
-  let pendingInstallGeneration = 0
+  let installingPKGs = $state(false)
+  let pendingPKGCount = $state(0)
+  let pendingPKGError = $state<string | null>(null)
+  let pendingPKGGeneration = 0
   let includeDRMFree = $state(false)
   let lastMode = $state<Mode>(initialMode)
   let emulatorRefreshing = $state(false)
@@ -75,7 +75,7 @@
   let canSearch = $derived(/^[A-Z]{4}\d{5}$/.test(normalizedID) && !titleState.loading && mode !== 'ps5')
   let canSourceSearch = $derived(source === 'firmware' ? $fetching !== mode : canSearch)
   let cachedFirmware = $derived($cache[mode] ?? null)
-  let downloadColumnLabels = $derived(['Kind', 'Version', source === 'firmware' ? 'Locale' : 'Scope', 'Size', 'Action'])
+  let downloadColumnLabels = $derived(['Kind', 'Version', source === 'firmware' ? 'Region' : 'Scope', 'Size', 'Action'])
   let firmwareLoading = $derived($fetching === mode && !cachedFirmware?.list)
   let selectedLibraryCount = $derived(libraryState.selected.length)
   $effect(() => {
@@ -100,7 +100,7 @@
   $effect(() => {
     if (!emulatorState.initialized) return
     hydrateEmulatorConfig(appConfig)
-    void refreshPendingInstalls()
+    void refreshPendingPKGs()
   })
 
   $effect(() => {
@@ -110,7 +110,7 @@
         libraryState.loading = false
         pruneLibrarySelection()
         refreshCachedEmulatorRows()
-        void refreshPendingInstalls()
+        void refreshPendingPKGs()
       }),
       Events.On('downloads:error', ({ data: msg }) => {
         libraryState.error = msg
@@ -167,7 +167,7 @@
           size: entry.size || 0,
           url: entry.url,
           sha1sum: entry.sha1sum || '',
-          locale: entry.locale,
+          region: entry.region,
           type: entry.type || 'Firmware',
           update,
         })
@@ -186,16 +186,16 @@
     size: number
     url: string
     sha1sum: string
-    locale?: string
+    region?: string
     type?: string
     systemVersion?: string
     update: psn.Update
   }
 
   let modeLibraryTitles = $derived(libraryState.titles.filter((title) => title.mode === mode))
-  let firmwareLibraryTitles = $derived(modeLibraryTitles.filter((title) => title.title_id === 'firmware'))
+  let firmwareLibraryRegions = $derived(modeLibraryTitles.filter((title) => title.title_id === 'firmware'))
   let gameLibraryTitles = $derived(modeLibraryTitles.filter((title) => title.title_id !== 'firmware'))
-  let firmwareLibraryRoot = $derived(firmwareLibraryTitles.length > 0 ? parentPath(firmwareLibraryTitles[0].path) : '')
+  let firmwareLibraryRoot = $derived(firmwareLibraryRegions.length > 0 ? parentPath(firmwareLibraryRegions[0].path) : '')
   let titleLibraryRoot = $derived(gameLibraryTitles.length > 0 ? parentPath(gameLibraryTitles[0].path) : '')
 
   async function ensureEmulatorBooted() {
@@ -261,7 +261,7 @@
       title_id: row.titleId,
       title_name: row.titleName,
       mode,
-      locale: row.locale || '',
+      region: row.region || '',
       kind:
         row.kind === 'Firmware'
           ? 'firmware'
@@ -290,7 +290,7 @@
       libraryState.titles = (await ListDownloadLibrary()) ?? []
       pruneLibrarySelection()
       refreshCachedEmulatorRows()
-      void refreshPendingInstalls()
+      void refreshPendingPKGs()
     } catch (e) {
       libraryState.error = e instanceof Error ? e.message : String(e)
       libraryState.titles = []
@@ -398,36 +398,36 @@
     }
   }
 
-  async function installLibraryDownloads() {
-    if (pendingInstallCount === 0 || isMissingInstallConfig()) return
-    installingDownloads = true
+  async function installLibraryPKGs() {
+    if (pendingPKGCount === 0 || isMissingInstallConfig()) return
+    installingPKGs = true
     emulatorError = null
     try {
-      await InstallLibraryPS3()
+      await InstallLibraryPKGsPS3()
     } catch (e) {
       emulatorError = e instanceof Error ? e.message : String(e)
     } finally {
-      await refreshPendingInstalls()
-      installingDownloads = false
+      await refreshPendingPKGs()
+      installingPKGs = false
     }
   }
 
-  async function refreshPendingInstalls() {
-    const generation = ++pendingInstallGeneration
+  async function refreshPendingPKGs() {
+    const generation = ++pendingPKGGeneration
     if (!emulatorState.initialized || isMissingInstallConfig()) {
-      pendingInstallCount = 0
-      pendingInstallError = null
+      pendingPKGCount = 0
+      pendingPKGError = null
       return
     }
     try {
-      const count = await PendingLibraryInstallsPS3()
-      if (generation !== pendingInstallGeneration) return
-      pendingInstallCount = count
-      pendingInstallError = null
+      const count = await PendingLibraryPKGsPS3()
+      if (generation !== pendingPKGGeneration) return
+      pendingPKGCount = count
+      pendingPKGError = null
     } catch (e) {
-      if (generation !== pendingInstallGeneration) return
-      pendingInstallCount = 0
-      pendingInstallError = e instanceof Error ? e.message : String(e)
+      if (generation !== pendingPKGGeneration) return
+      pendingPKGCount = 0
+      pendingPKGError = e instanceof Error ? e.message : String(e)
     }
   }
 
@@ -453,7 +453,7 @@
       (title) =>
         title.mode === mode &&
         title.title_id === row.titleId &&
-        (row.kind !== 'Firmware' || title.locale === row.locale)
+        (row.kind !== 'Firmware' || title.region === row.region)
     )
     if (!cachedTitle) return false
     const version = row.kind === 'DRM-free' ? `${row.version}_drm_free` : row.version
@@ -653,7 +653,7 @@
   }
 
   function firmwareKey(entry: psn.FirmwareEntry): string {
-    return `${entry.locale}-${entry.type || 'Firmware'}-${entry.version}-${entry.url}`
+    return `${entry.region}-${entry.type || 'Firmware'}-${entry.version}-${entry.url}`
   }
 
   function labelForFile(file: File): string {
@@ -767,7 +767,7 @@
                 <td class="font-mono">v{row.version}</td>
                 <td class="truncate text-muted">
                   {#if row.kind === 'Firmware'}
-                    {row.locale}
+                    {row.region}
                   {:else}
                     {row.titleId}{row.systemVersion ? ` · FW ${row.systemVersion}` : ''}
                   {/if}
@@ -807,14 +807,14 @@
             {syncingAll ? 'Syncing all' : 'Sync all'}
           </button>
           <button
-            onclick={installLibraryDownloads}
-            disabled={installingDownloads || pendingInstallCount === 0 || isMissingInstallConfig()}
+            onclick={installLibraryPKGs}
+            disabled={installingPKGs || pendingPKGCount === 0 || isMissingInstallConfig()}
             class="btn btn-secondary"
-            title={pendingInstallError || (pendingInstallCount > 0
-              ? `Install ${pendingInstallCount} downloaded Library package(s) newer than RPCS3's installed versions`
-              : 'No downloaded Library packages need installation')}
+            title={pendingPKGError || (pendingPKGCount > 0
+              ? `Install ${pendingPKGCount} Library PKG(s) newer than RPCS3's installed versions`
+              : 'No Library PKGs need installation')}
           >
-            {installingDownloads ? 'Installing downloads' : 'Install downloads'}
+            {installingPKGs ? 'Installing PKGs' : 'Install PKGs'}
           </button>
           <button onclick={refreshEmulator} disabled={emulatorRefreshing || isMissingGamesConfig()} class="btn btn-secondary">
             {emulatorRefreshing ? 'Refreshing' : 'Refresh'}
@@ -828,14 +828,14 @@
     {:else if !emulatorState.cfg}
       <div class="empty">Loading emulator settings</div>
     {:else}
-      {#if isMissingGamesConfig() || isMissingInstallConfig() || emulatorState.loadError || emulatorError || pendingInstallError}
+      {#if isMissingGamesConfig() || isMissingInstallConfig() || emulatorState.loadError || emulatorError || pendingPKGError}
         <div class="border-b border-error/40 bg-error-bg px-3 py-2 text-xs text-error-fg">
           {#if !emulatorState.gamesYMLInput}<div>Invalid setting: games.yml</div>{/if}
           {#if !emulatorState.hdd0Input}<div>Invalid setting: dev_hdd0/game</div>{/if}
           {#if !isMissingGamesConfig() && (emulatorState.loadError || emulatorError)}
             <div>{emulatorState.loadError || emulatorError}</div>
           {/if}
-          {#if pendingInstallError}<div>{pendingInstallError}</div>{/if}
+          {#if pendingPKGError}<div>{pendingPKGError}</div>{/if}
         </div>
       {/if}
 
@@ -924,8 +924,8 @@
           <div class="empty">Downloaded firmware and title updates</div>
         {:else}
           <div class="divide-y divide-border text-xs" role="tree" aria-label="Downloaded library">
-            {#if firmwareLibraryTitles.length > 0}
-              {@const firmwareFiles = filesForTitles(firmwareLibraryTitles)}
+            {#if firmwareLibraryRegions.length > 0}
+              {@const firmwareFiles = filesForTitles(firmwareLibraryRegions)}
               {@const firmwareKey = `branch:${mode}:firmware`}
               <section
                 role="treeitem"
@@ -951,44 +951,44 @@
                     <div class="font-mono font-semibold text-fg">firmware</div>
                     <div class="truncate font-mono text-muted-soft" title={firmwareLibraryRoot}>{firmwareLibraryRoot}</div>
                   </div>
-                  <span class="text-muted">{firmwareLibraryTitles.length} locales · {formatSize(totalFileSize(firmwareFiles))}</span>
+                  <span class="text-muted">{firmwareLibraryRegions.length} regions · {formatSize(totalFileSize(firmwareFiles))}</span>
                   <button onclick={() => OpenFolder(firmwareLibraryRoot)} class="btn btn-secondary">Open</button>
                 </div>
 
                 {#if titleExpanded(firmwareKey)}
                   <div class="divide-y divide-border" role="group">
-                    {#each firmwareLibraryTitles as firmwareLocale (`${firmwareLocale.mode}-firmware-${firmwareLocale.locale}`)}
+                    {#each firmwareLibraryRegions as firmwareRegion (`${firmwareRegion.mode}-firmware-${firmwareRegion.region}`)}
                       <section
                         role="treeitem"
-                        aria-expanded={titleExpanded(firmwareLocale.path)}
-                        aria-selected={titleSelectionState(firmwareLocale) !== 'none'}
+                        aria-expanded={titleExpanded(firmwareRegion.path)}
+                        aria-selected={titleSelectionState(firmwareRegion) !== 'none'}
                       >
                         <div class="tree-row bg-surface pl-7 pr-3">
                           <button
-                            onclick={() => toggleTitleExpanded(firmwareLocale.path)}
+                            onclick={() => toggleTitleExpanded(firmwareRegion.path)}
                             class="btn btn-quiet h-6 min-h-6 w-6 p-0"
-                            aria-label={`${titleExpanded(firmwareLocale.path) ? 'Collapse' : 'Expand'} ${firmwareLocale.locale}`}
+                            aria-label={`${titleExpanded(firmwareRegion.path) ? 'Collapse' : 'Expand'} ${firmwareRegion.region}`}
                           >
-                            <span aria-hidden="true">{titleExpanded(firmwareLocale.path) ? '▾' : '▸'}</span>
+                            <span aria-hidden="true">{titleExpanded(firmwareRegion.path) ? '▾' : '▸'}</span>
                           </button>
                           <input
                             type="checkbox"
-                            checked={titleSelectionState(firmwareLocale) === 'all'}
-                            indeterminate={titleSelectionState(firmwareLocale) === 'some'}
-                            aria-label={`Select ${firmwareLocale.locale} firmware`}
-                            onchange={(event) => toggleTitle(firmwareLocale, event.currentTarget.checked)}
+                            checked={titleSelectionState(firmwareRegion) === 'all'}
+                            indeterminate={titleSelectionState(firmwareRegion) === 'some'}
+                            aria-label={`Select ${firmwareRegion.region} firmware`}
+                            onchange={(event) => toggleTitle(firmwareRegion, event.currentTarget.checked)}
                           />
                           <div class="min-w-0">
-                            <div class="font-semibold text-fg-strong">{firmwareLocale.locale || 'unknown'}</div>
-                            <div class="truncate font-mono text-muted-soft" title={firmwareLocale.path}>{firmwareLocale.path}</div>
+                            <div class="font-semibold text-fg-strong">{firmwareRegion.region || 'unknown'}</div>
+                            <div class="truncate font-mono text-muted-soft" title={firmwareRegion.path}>{firmwareRegion.path}</div>
                           </div>
-                          <span class="text-muted">{firmwareLocale.file_count} files · {formatSize(firmwareLocale.total_size)}</span>
-                          <button onclick={() => OpenFolder(firmwareLocale.path)} class="btn btn-secondary">Open</button>
+                          <span class="text-muted">{firmwareRegion.file_count} files · {formatSize(firmwareRegion.total_size)}</span>
+                          <button onclick={() => OpenFolder(firmwareRegion.path)} class="btn btn-secondary">Open</button>
                         </div>
 
-                        {#if titleExpanded(firmwareLocale.path)}
+                        {#if titleExpanded(firmwareRegion.path)}
                           <div class="divide-y divide-border bg-inset" role="group">
-                            {#each firmwareLocale.files ?? [] as file (file.path)}
+                            {#each firmwareRegion.files ?? [] as file (file.path)}
                               <div class="tree-file-row pl-12 pr-3" role="treeitem" aria-selected={selected(file.path)}>
                                 <span class="text-center text-muted-faint" aria-hidden="true">└</span>
                                 <input
