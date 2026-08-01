@@ -810,17 +810,17 @@
             disabled={syncingAll || emulatorRefreshing || isMissingGamesConfig() || Boolean(emulatorState.loadError)}
             class="btn btn-primary"
           >
-            {syncingAll ? 'Syncing all' : 'Sync all'}
+            Sync all
           </button>
           <button
             onclick={installAll}
             disabled={installingAll || pendingPKGCount === 0 || isMissingInstallConfig()}
             class="btn btn-secondary"
           >
-            {installingAll ? 'Installing all' : 'Install all'}
+            Install all
           </button>
           <button onclick={() => refreshEmulator()} disabled={emulatorRefreshing || isMissingGamesConfig()} class="btn btn-secondary">
-            {emulatorRefreshing ? 'Refreshing' : 'Refresh'}
+            Refresh
           </button>
         </div>
       {/if}
