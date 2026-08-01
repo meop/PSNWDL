@@ -1130,7 +1130,7 @@
     grid-template-rows: minmax(17rem, 1fr) minmax(17rem, 1fr);
     grid-template-areas:
       'downloader activity'
-      'emulator library';
+      'library emulator';
     gap: 0.75rem;
     min-height: 0;
     height: 100%;
@@ -1276,8 +1276,8 @@
       grid-template-areas:
         'downloader'
         'activity'
-        'emulator'
-        'library';
+        'library'
+        'emulator';
       overflow: auto;
     }
   }
