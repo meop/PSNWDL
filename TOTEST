@@ -1,0 +1,5 @@
+# Manual test checklist
+
+- Download and library workflows.
+- Emulator sync behavior.
+- Investigate the current `wails.localhost:34115` response.
