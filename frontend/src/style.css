@@ -1,0 +1,243 @@
+@import "tailwindcss";
+
+/*
+ * Semantic color tokens.
+ *
+ * Components use these (bg-surface, text-muted, border-border, bg-accent,
+ * text-success, etc.) so the whole app re-skins by flipping `data-theme` on
+ * <html>. The values below are the dark palette (the default, applied at
+ * :root); [data-theme='light'] overrides them. Tailwind v4 `@theme inline`
+ * maps each CSS var to a utility so `bg-surface` => `background-color: var(--c-surface)`.
+ *
+ * The `inline` keyword keeps the variable reference live (rather than inlining
+ * the resolved value at build time), which is what lets theming work at runtime.
+ */
+
+/* --- Dark palette (default) ----------------------------------------------- */
+
+:root {
+  --c-bg: #202020;            /* app background */
+  --c-surface: #2b2b2b;       /* panels, header, sidebar, footer */
+  --c-surface-2: #383838;     /* inputs, hover, table head */
+  --c-surface-3: #505050;     /* borders on inputs/badges */
+  --c-inset: #171717;         /* terminal/inline code blocks */
+  --c-border: #4a4a4a;
+  --c-fg: #f3f3f3;
+  --c-fg-strong: #ffffff;
+  --c-muted: #d0d0d0;
+  --c-muted-soft: #a8a8a8;
+  --c-muted-faint: #7a7a7a;
+
+  --c-accent: #60cdff;
+  --c-accent-hover: #8adaff;
+  --c-accent-fg: #001f2e;
+
+  --c-success: #6ccb5f;
+  --c-success-fg: #dff6dc;
+  --c-success-bg: rgba(108, 203, 95, 0.18);
+  --c-warn: #f9d65c;
+  --c-warn-fg: #fff4c0;
+  --c-warn-bg: rgba(249, 214, 92, 0.18);
+  --c-error: #ff6b6b;
+  --c-error-fg: #ffd7d7;
+  --c-error-bg: rgba(255, 107, 107, 0.18);
+}
+
+/* --- Light palette -------------------------------------------------------- */
+
+[data-theme='light'] {
+  --c-bg: #f3f3f3;
+  --c-surface: #ffffff;
+  --c-surface-2: #f5f5f5;
+  --c-surface-3: #d1d1d1;
+  --c-inset: #fafafa;
+  --c-border: #d6d6d6;
+  --c-fg: #1f1f1f;
+  --c-fg-strong: #111111;
+  --c-muted: #4f4f4f;
+  --c-muted-soft: #6b6b6b;
+  --c-muted-faint: #9a9a9a;
+
+  --c-accent: #005a9e;
+  --c-accent-hover: #006fc9;
+  --c-accent-fg: #ffffff;
+
+  --c-success: #107c10;
+  --c-success-fg: #0b5a0b;
+  --c-success-bg: rgba(16, 124, 16, 0.12);
+  --c-warn: #9d5d00;
+  --c-warn-fg: #8a4f00;
+  --c-warn-bg: rgba(157, 93, 0, 0.12);
+  --c-error: #c42b1c;
+  --c-error-fg: #a4262c;
+  --c-error-bg: rgba(196, 43, 28, 0.12);
+}
+
+/* --- Expose tokens to Tailwind as utilities ------------------------------- */
+
+@theme inline {
+  --color-bg: var(--c-bg);
+  --color-surface: var(--c-surface);
+  --color-surface-2: var(--c-surface-2);
+  --color-surface-3: var(--c-surface-3);
+  --color-inset: var(--c-inset);
+  --color-border: var(--c-border);
+  --color-fg: var(--c-fg);
+  --color-fg-strong: var(--c-fg-strong);
+  --color-muted: var(--c-muted);
+  --color-muted-soft: var(--c-muted-soft);
+  --color-muted-faint: var(--c-muted-faint);
+
+  --color-accent: var(--c-accent);
+  --color-accent-hover: var(--c-accent-hover);
+  --color-accent-fg: var(--c-accent-fg);
+
+  --color-success: var(--c-success);
+  --color-success-fg: var(--c-success-fg);
+  --color-success-bg: var(--c-success-bg);
+  --color-warn: var(--c-warn);
+  --color-warn-fg: var(--c-warn-fg);
+  --color-warn-bg: var(--c-warn-bg);
+  --color-error: var(--c-error);
+  --color-error-fg: var(--c-error-fg);
+  --color-error-bg: var(--c-error-bg);
+}
+
+/* --- Base ----------------------------------------------------------------- */
+
+html, body, #app {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background-color: var(--c-bg);
+  color: var(--c-fg);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen,
+    Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/*
+ * Form controls in Chromium derive their default colors from the OS, not the
+ * page, so they would stay dark in light mode. Normalize them to inherit.
+ * NOTE: <button> is intentionally excluded — forcing color:inherit on buttons
+ * makes it override Tailwind's text-color utilities (because preflight layers
+ * utilities above base, but a bare rule is unlayered and wins). Buttons get
+ * font:inherit from preflight already, and their color must come from the
+ * utility classes (e.g. text-accent-fg) so primary buttons read in both themes.
+ */
+input, select, textarea {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  font: inherit;
+}
+
+button, input, select, textarea {
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease,
+    color 120ms ease,
+    box-shadow 120ms ease,
+    opacity 120ms ease;
+}
+
+.page {
+  width: 100%;
+  max-width: 1120px;
+}
+
+.page-header {
+  margin-bottom: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.page-title {
+  font-size: 1.125rem;
+  line-height: 1.75rem;
+  font-weight: 650;
+  color: var(--c-fg-strong);
+}
+
+.panel {
+  border: 1px solid var(--c-border);
+  border-radius: 0.5rem;
+  background: color-mix(in srgb, var(--c-surface) 88%, var(--c-surface-2));
+}
+
+.btn {
+  display: inline-flex;
+  min-height: 1.875rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  border-radius: 0.375rem;
+  padding: 0.25rem 0.625rem;
+  font-size: 0.75rem;
+  line-height: 1rem;
+  font-weight: 550;
+  white-space: nowrap;
+}
+
+.btn:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--c-accent) 70%, transparent);
+  outline-offset: 2px;
+}
+
+.btn-primary {
+  border: 1px solid var(--c-accent);
+  background: var(--c-accent);
+  color: var(--c-accent-fg);
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--c-fg-strong) 12%, transparent) inset;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: var(--c-accent-hover);
+  border-color: var(--c-accent-hover);
+}
+
+.btn-secondary {
+  border: 1px solid color-mix(in srgb, var(--c-surface-3) 86%, var(--c-fg));
+  background: color-mix(in srgb, var(--c-surface) 70%, var(--c-surface-2));
+  color: var(--c-fg);
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background: var(--c-surface-2);
+  border-color: color-mix(in srgb, var(--c-surface-3) 70%, var(--c-accent));
+}
+
+.btn-quiet {
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--c-muted);
+}
+
+.btn-quiet:hover:not(:disabled) {
+  background: var(--c-surface-2);
+  color: var(--c-fg);
+}
+
+.btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.52;
+}
+
+.input {
+  border: 1px solid var(--c-surface-3);
+  border-radius: 0.375rem;
+  background: var(--c-surface);
+  color: var(--c-fg);
+}
+
+.input:focus {
+  border-color: var(--c-accent);
+  outline: none;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--c-accent) 20%, transparent);
+}
