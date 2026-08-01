@@ -149,7 +149,7 @@
               <div class="text-muted">Product</div>
               <div class="font-medium text-fg-strong">PSNWDL</div>
               <div class="text-muted">Description</div>
-              <div class="text-fg">Modern PlayStation Network Download tool</div>
+              <div class="text-fg">Modern PlayStation Network Downloader</div>
               <div class="text-muted">Version</div>
               <div class="font-mono text-fg">{appVersion}</div>
               <div class="text-muted">Credit</div>
