@@ -103,6 +103,11 @@ module root to regenerate the TS models/bindings, then rebuild.
     `config.MigrateLibraryLayout`. Keep download destinations, scanning,
     reconciliation, Emulator cache actions, and documentation on this layout.
 
+12. **Download results exclude files already in Library.** Filtering is local
+    and reactive against the downloaded-library store: completion hides the
+    matching row and deletion reveals it again when that firmware/title result
+    is currently loaded. Do not turn Library changes into fresh PSN searches.
+
 ---
 
 ## Conventions

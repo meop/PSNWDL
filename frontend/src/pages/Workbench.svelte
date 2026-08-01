@@ -3,13 +3,14 @@
   import type { Mode } from '../app/types'
   import {
     AutoDetectGamesYML,
-    ClearTitleCache,
+    DeleteTitleCachePS3,
     DeleteLibraryItems,
     EnqueueDownload,
     InstallFolderPS3,
     InstallJob,
     ListDownloadLibrary,
     OpenFolder,
+    OpenTitleCachePS3,
     PickDirectory,
     ReconcileLibraryPS3,
     SearchPS3,
@@ -41,6 +42,8 @@
   type Title = downloads.Title
   type File = downloads.File
   const ACTIVE_JOB_STATES = new Set(['queued', 'downloading', 'paused', 'resuming', 'verifying'])
+  const DOWNLOAD_COLUMN_LABELS = ['Selection', 'Kind', 'Version', 'Scope', 'Size', 'Action']
+  const EMULATOR_COLUMN_LABELS = ['Title', 'Installed to server', 'Status', 'Action']
 
   let { mode, defaultDownload = 'firmware', appConfig }: Props = $props()
 
@@ -50,12 +53,15 @@
   let emulatorError = $state<string | null>(null)
   let syncingAll = $state(false)
   let emulatorSyncJobIDs = $state<string[]>([])
+  let emulatorInstallJobIDs = $state<string[]>([])
   let installingDone = $state(false)
   let installingFolder = $state(false)
   let includeDRMFree = $state(false)
   let lastMode = $state<Mode>('ps3')
   let emulatorConfigKey = $state('')
   let expandedLibraryTitles = $state<Record<string, boolean>>({})
+  let downloadColumnWidths = $state([44, 80, 80, 180, 80, 128])
+  let emulatorColumnWidths = $state([200, 140, 120, 220])
   let titleState = $derived(searchState[mode])
   let normalizedID = $derived(titleState.titleID.trim().toUpperCase())
   let canSearch = $derived(/^[A-Z]{4}\d{5}$/.test(normalizedID) && !titleState.loading && mode !== 'ps5')
@@ -77,6 +83,7 @@
     if (mode !== lastMode) {
       source = normalizedSource(defaultDownload, mode)
       if (mode !== 'ps3') includeDRMFree = false
+      libraryState.selected = []
       lastMode = mode
       if (mode === 'ps3' && emulatorState.initialized) void refreshEmulator()
     }
@@ -101,6 +108,22 @@
     if (nextKey === emulatorConfigKey) return
     hydrateEmulatorConfig(appConfig)
     emulatorConfigKey = nextKey
+    if (mode === 'ps3') void refreshEmulator()
+  })
+
+  $effect(() => {
+    const trackedIDs = emulatorInstallJobIDs
+    if (trackedIDs.length === 0) return
+
+    const trackedJobs = trackedIDs.map((id) => $jobsList.find((job) => job.id === id))
+    if (trackedJobs.some((job) => !job)) return
+    const finished = trackedJobs.every(
+      (job) => job?.state === 'failed' || job?.state === 'canceled' || (job?.state === 'done' && !!job.installed_to)
+    )
+    if (!finished) return
+
+    emulatorInstallJobIDs = []
+    installingDone = false
     if (mode === 'ps3') void refreshEmulator()
   })
 
@@ -132,7 +155,7 @@
     if (mode === 'ps3') void refreshEmulator()
   })
 
-  let downloadRows = $derived.by(() => {
+  let allDownloadRows = $derived.by(() => {
     const rows: DownloadRow[] = []
     if (source === 'title' && titleState.result) {
       for (const update of titleState.result.updates ?? []) {
@@ -175,6 +198,7 @@
     }
     return rows.sort((a, b) => compareVersion(b.version, a.version))
   })
+  let downloadRows = $derived(allDownloadRows.filter((row) => !downloaded(row)))
   let availableDownloadRows = $derived(downloadRows.filter((row) => !isQueued(row)))
   let selectedAvailableCount = $derived(
     availableDownloadRows.filter((row) => selectedDownloads.includes(row.key)).length
@@ -194,6 +218,10 @@
     systemVersion?: string
     update: psn.Update
   }
+
+  let modeLibraryTitles = $derived(libraryState.titles.filter((title) => title.mode === mode))
+  let firmwareLibraryTitles = $derived(modeLibraryTitles.filter((title) => title.title_id === 'firmware'))
+  let gameLibraryTitles = $derived(modeLibraryTitles.filter((title) => title.title_id !== 'firmware'))
 
   async function ensureEmulatorBooted() {
     if (emulatorState.initialized) return
@@ -294,6 +322,7 @@
     downloadError = null
     try {
       await enqueueRow(row)
+      setSelectedDownload(row.key, false)
     } catch (e) {
       downloadError = e instanceof Error ? e.message : String(e)
     }
@@ -394,23 +423,23 @@
   async function installFinishedPS3Jobs() {
     if (finishedPS3Jobs.length === 0) return
     installingDone = true
+    emulatorInstallJobIDs = finishedPS3Jobs.map((job) => job.id)
     emulatorError = null
     try {
       for (const job of finishedPS3Jobs) {
         await InstallJob(job.id)
       }
-      await refreshEmulator()
     } catch (e) {
-      emulatorError = e instanceof Error ? e.message : String(e)
-    } finally {
+      emulatorInstallJobIDs = []
       installingDone = false
+      emulatorError = e instanceof Error ? e.message : String(e)
     }
   }
 
-  async function clearCache(titleID: string) {
+  async function deleteCache(titleID: string) {
     emulatorError = null
     try {
-      await ClearTitleCache(titleID)
+      await DeleteTitleCachePS3(titleID)
       await refreshEmulator()
     } catch (e) {
       emulatorError = e instanceof Error ? e.message : String(e)
@@ -434,8 +463,12 @@
   }
 
   async function openCacheFolder(titleID: string) {
-    const root = emulatorState.cfg?.storage.library_dir || ''
-    await OpenFolder(`${root}/ps3/title/${titleID}`)
+    emulatorError = null
+    try {
+      await OpenTitleCachePS3(titleID)
+    } catch (e) {
+      emulatorError = e instanceof Error ? e.message : String(e)
+    }
   }
 
   function pruneLibrarySelection() {
@@ -453,6 +486,15 @@
         job.mode === mode &&
         job.update?.url === row.url
     )
+  }
+
+  function downloaded(row: DownloadRow): boolean {
+    const cachedTitle = libraryState.titles.find(
+      (title) => title.mode === mode && title.title_id === row.titleId
+    )
+    if (!cachedTitle) return false
+    const version = row.kind === 'DRM-free' ? `${row.version}_drm_free` : row.version
+    return (cachedTitle.files ?? []).some((file) => file.version === version)
   }
 
   function selectedDownload(key: string): boolean {
@@ -498,6 +540,30 @@
     libraryState.selected = [...next]
   }
 
+  function filesForTitles(titles: Title[]): File[] {
+    return titles.flatMap((title) => title.files ?? [])
+  }
+
+  function totalFileSize(files: File[]): number {
+    return files.reduce((total, file) => total + file.size, 0)
+  }
+
+  function fileSelectionState(files: File[]): 'none' | 'some' | 'all' {
+    if (files.length === 0) return 'none'
+    const count = files.filter((file) => selected(file.path)).length
+    if (count === 0) return 'none'
+    return count === files.length ? 'all' : 'some'
+  }
+
+  function toggleFiles(files: File[], checked: boolean) {
+    const next = new Set(libraryState.selected)
+    for (const file of files) {
+      if (checked) next.add(file.path)
+      else next.delete(file.path)
+    }
+    libraryState.selected = [...next]
+  }
+
   function titleSelectionState(title: Title): 'none' | 'some' | 'all' {
     const files = title.files ?? []
     if (files.length === 0) return 'none'
@@ -522,6 +588,40 @@
     return $jobsList.some(
       (job) => emulatorSyncJobIDs.includes(job.id) && job.title_id === titleID && ACTIVE_JOB_STATES.has(String(job.state))
     )
+  }
+
+  function columnWidthTotal(widths: number[]): number {
+    return widths.reduce((total, width) => total + width, 0)
+  }
+
+  function resizeColumn(event: PointerEvent, table: 'download' | 'emulator', index: number) {
+    event.preventDefault()
+    const widths = table === 'download' ? downloadColumnWidths : emulatorColumnWidths
+    const startX = event.clientX
+    const startWidth = widths[index]
+    const minimum = index === 0 && table === 'download' ? 40 : 64
+
+    const move = (nextEvent: PointerEvent) => {
+      widths[index] = Math.max(minimum, startWidth + nextEvent.clientX - startX)
+    }
+    const stop = () => {
+      window.removeEventListener('pointermove', move)
+      window.removeEventListener('pointerup', stop)
+    }
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerup', stop)
+  }
+
+  function nudgeColumn(table: 'download' | 'emulator', index: number, delta: number) {
+    const widths = table === 'download' ? downloadColumnWidths : emulatorColumnWidths
+    const minimum = index === 0 && table === 'download' ? 40 : 64
+    widths[index] = Math.max(minimum, widths[index] + delta)
+  }
+
+  function resizeColumnWithKeyboard(event: KeyboardEvent, table: 'download' | 'emulator', index: number) {
+    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
+    event.preventDefault()
+    nudgeColumn(table, index, event.key === 'ArrowLeft' ? -8 : 8)
   }
 
   function formatSize(bytes: number | undefined): string {
@@ -580,53 +680,41 @@
         <h2>Download</h2>
         <p>{mode.toUpperCase()} discovery and queueing</p>
       </div>
-      <div class="flex items-center gap-2">
-        <select bind:value={source} class="input h-8 px-2 text-xs">
-          <option value="firmware">Firmware</option>
-          {#if mode !== 'ps5'}<option value="title">Title</option>{/if}
-        </select>
-      </div>
-    </div>
-
-    <div class="border-b border-border p-3">
       <form
-        class="flex items-center justify-between gap-3"
+        class="flex min-w-0 flex-wrap items-center justify-end gap-2"
         onsubmit={(e) => {
           e.preventDefault()
           refreshSource()
         }}
       >
-        <div class="min-w-0 text-sm text-muted">
-          {#if source === 'title'}
-            Search by title ID, for example BCUS98114
-          {:else}
-            Search latest firmware by region for {mode.toUpperCase()}
+        {#if source === 'title'}
+          <input
+            bind:value={titleState.titleID}
+            placeholder="BCUS98114"
+            aria-label="Title ID"
+            maxlength="9"
+            class="input h-8 w-32 px-2 font-mono text-xs"
+          />
+          {#if mode === 'ps3'}
+            <label class="flex items-center gap-1 text-xs text-muted">
+              <input type="checkbox" bind:checked={includeDRMFree} />
+              DRM-free
+            </label>
           {/if}
-        </div>
-        <div class="flex shrink-0 items-center gap-2">
-          {#if source === 'title'}
-            <input
-              bind:value={titleState.titleID}
-              placeholder="BCUS98114"
-              maxlength="9"
-              class="input h-9 w-36 px-3 font-mono text-sm"
-            />
-            {#if mode === 'ps3'}
-              <label class="flex items-center gap-1 text-xs text-muted">
-                <input type="checkbox" bind:checked={includeDRMFree} />
-                DRM-free
-              </label>
-            {/if}
-          {/if}
-          <button type="submit" disabled={!canSourceSearch} class="btn btn-primary h-9 px-4">Search</button>
-        </div>
+        {/if}
+        <button type="submit" disabled={!canSourceSearch} class="btn btn-primary">Search</button>
+        <select bind:value={source} aria-label="Download type" class="input h-8 px-2 text-xs leading-4">
+          <option value="firmware">Firmware</option>
+          {#if mode !== 'ps5'}<option value="title">Title</option>{/if}
+        </select>
       </form>
-      {#if titleState.error || downloadError}
-        <div class="mt-3 rounded border border-error/40 bg-error-bg px-3 py-2 text-xs text-error-fg">
-          {titleState.error || downloadError}
-        </div>
-      {/if}
     </div>
+
+    {#if titleState.error || downloadError}
+      <div class="border-b border-error/40 bg-error-bg px-3 py-2 text-xs text-error-fg">
+        {titleState.error || downloadError}
+      </div>
+    {/if}
 
     <div class="flex items-center justify-between border-b border-border px-3 py-2 text-xs text-muted-soft">
       <label class="flex items-center gap-2">
@@ -647,17 +735,34 @@
       {#if firmwareLoading}
         <div class="empty">Loading latest firmware</div>
       {:else if downloadRows.length === 0}
-        <div class="empty">{source === 'title' ? 'Title update results' : 'Latest firmware by region'}</div>
+        <div class="empty">
+          {allDownloadRows.length > 0
+            ? 'All results are already in Library'
+            : source === 'title'
+              ? 'Title update results'
+              : 'Latest firmware by region'}
+        </div>
       {:else}
-        <table class="w-full table-fixed text-sm">
+        <table class="data-table table-fixed" style={`min-width: ${columnWidthTotal(downloadColumnWidths)}px`}>
+          <colgroup>
+            {#each downloadColumnWidths as width, index (index)}
+              <col style={`width: ${width}px`} />
+            {/each}
+          </colgroup>
           <thead>
             <tr>
-              <th class="w-8"></th>
-              <th class="w-24">Kind</th>
-              <th class="w-24">Version</th>
-              <th>Scope</th>
-              <th class="w-24">Size</th>
-              <th class="w-32">Action</th>
+              {#each DOWNLOAD_COLUMN_LABELS as label, index (label)}
+                <th>
+                  {#if index > 0}{label}{/if}
+                  <button
+                    type="button"
+                    class="column-resizer"
+                    aria-label={`Resize ${label} column`}
+                    onpointerdown={(event) => resizeColumn(event, 'download', index)}
+                    onkeydown={(event) => resizeColumnWithKeyboard(event, 'download', index)}
+                  ></button>
+                </th>
+              {/each}
             </tr>
           </thead>
           <tbody>
@@ -682,7 +787,7 @@
                 </td>
                 <td class="text-muted">{formatSize(row.size)}</td>
                 <td>
-                  <button onclick={() => enqueueSingle(row)} disabled={isQueued(row)} class="btn btn-primary w-24 justify-center">
+                  <button onclick={() => enqueueSingle(row)} disabled={isQueued(row)} class="btn btn-secondary w-24 justify-center">
                     {isQueued(row) ? 'In progress' : 'Download'}
                   </button>
                 </td>
@@ -701,9 +806,35 @@
         <p>{mode === 'ps3' ? 'Configured paths and install actions' : 'No actions for this platform'}</p>
       </div>
       {#if mode === 'ps3'}
-        <button onclick={refreshEmulator} disabled={emulatorState.loading || isMissingEmulatorConfig()} class="btn btn-secondary">
-          Refresh
-        </button>
+        <div class="flex flex-wrap items-center justify-end gap-2">
+          <button
+            onclick={syncAllNeeded}
+            disabled={syncingAll || emulatorState.rows.length === 0 || isMissingEmulatorConfig()}
+            class="btn btn-primary"
+            title="Download missing PS3 updates for the listed RPCS3 titles"
+          >
+            Download updates
+          </button>
+          <button
+            onclick={installFinishedPS3Jobs}
+            disabled={installingDone || finishedPS3Jobs.length === 0 || isMissingEmulatorConfig()}
+            class="btn btn-secondary"
+            title="Install all completed PS3 update downloads into RPCS3"
+          >
+            {installingDone ? 'Installing downloads' : 'Install downloads'}
+          </button>
+          <button
+            onclick={installPKGFolder}
+            disabled={installingFolder || isMissingEmulatorConfig()}
+            class="btn btn-secondary"
+            title="Choose a folder of PS3 pkg files and install them into RPCS3"
+          >
+            {installingFolder ? 'Installing folder' : 'Install pkg folder'}
+          </button>
+          <button onclick={refreshEmulator} disabled={emulatorState.loading || isMissingEmulatorConfig()} class="btn btn-secondary">
+            Refresh
+          </button>
+        </div>
       {/if}
     </div>
 
@@ -712,30 +843,15 @@
     {:else if !emulatorState.cfg}
       <div class="empty">Loading emulator settings</div>
     {:else}
-      <div class="border-b border-border p-3">
-        {#if isMissingEmulatorConfig()}
-          <div class="mb-3 rounded border border-error/40 bg-error-bg px-3 py-2 text-xs text-error-fg">
-            {#if !emulatorState.gamesYMLInput}<div>Invalid setting: games.yml</div>{/if}
-            {#if !emulatorState.hdd0Input}<div>Invalid setting: dev_hdd0/game</div>{/if}
-          </div>
-        {/if}
-        <div class="flex flex-wrap justify-end gap-2">
-          <button onclick={syncAllNeeded} disabled={syncingAll || emulatorState.rows.length === 0} class="btn btn-primary">
-            Download updates
-          </button>
-          <button onclick={installFinishedPS3Jobs} disabled={installingDone || finishedPS3Jobs.length === 0} class="btn btn-secondary">
-            Install completed
-          </button>
-          <button onclick={installPKGFolder} disabled={installingFolder || isMissingEmulatorConfig()} class="btn btn-secondary">
-            {installingFolder ? 'Installing folder' : 'Install PKG folder'}
-          </button>
+      {#if isMissingEmulatorConfig() || (emulatorState.loadError && !isMissingEmulatorConfig()) || emulatorError}
+        <div class="border-b border-error/40 bg-error-bg px-3 py-2 text-xs text-error-fg">
+          {#if !emulatorState.gamesYMLInput}<div>Invalid setting: games.yml</div>{/if}
+          {#if !emulatorState.hdd0Input}<div>Invalid setting: dev_hdd0/game</div>{/if}
+          {#if !isMissingEmulatorConfig() && (emulatorState.loadError || emulatorError)}
+            <div>{emulatorState.loadError || emulatorError}</div>
+          {/if}
         </div>
-        {#if (emulatorState.loadError && !isMissingEmulatorConfig()) || emulatorError}
-          <div class="mt-3 rounded border border-error/40 bg-error-bg px-3 py-2 text-xs text-error-fg">
-            {emulatorState.loadError || emulatorError}
-          </div>
-        {/if}
-      </div>
+      {/if}
 
       <div class="min-h-0 flex-1 overflow-auto">
         {#if emulatorState.loading}
@@ -743,13 +859,26 @@
         {:else if emulatorState.rows.length === 0}
           <div class="empty">Emulator titles</div>
         {:else}
-          <table class="w-full table-fixed text-sm">
+          <table class="data-table table-fixed" style={`min-width: ${columnWidthTotal(emulatorColumnWidths)}px`}>
+            <colgroup>
+              {#each emulatorColumnWidths as width, index (index)}
+                <col style={`width: ${width}px`} />
+              {/each}
+            </colgroup>
             <thead>
               <tr>
-                <th>Title</th>
-                <th>Installed -> Server</th>
-                <th>Status</th>
-                <th class="w-52">Action</th>
+                {#each EMULATOR_COLUMN_LABELS as label, index (label)}
+                  <th>
+                    {label === 'Installed to server' ? 'Installed -> Server' : label}
+                    <button
+                      type="button"
+                      class="column-resizer"
+                      aria-label={`Resize ${label} column`}
+                      onpointerdown={(event) => resizeColumn(event, 'emulator', index)}
+                      onkeydown={(event) => resizeColumnWithKeyboard(event, 'emulator', index)}
+                    ></button>
+                  </th>
+                {/each}
               </tr>
             </thead>
             <tbody>
@@ -770,13 +899,13 @@
                   <td>
                     <div class="flex gap-1">
                       {#if row.status === 'update_available' || row.status === 'missing_all'}
-                        <button onclick={() => syncTitle(row.title_id)} disabled={titleDownloadInProgress(row.title_id)} class="btn btn-primary">
+                        <button onclick={() => syncTitle(row.title_id)} disabled={titleDownloadInProgress(row.title_id)} class="btn btn-secondary">
                           {titleDownloadInProgress(row.title_id) ? 'In progress' : 'Download'}
                         </button>
                       {/if}
                       {#if row.latest_local}
                         <button onclick={() => openCacheFolder(row.title_id)} class="btn btn-secondary">Open</button>
-                        <button onclick={() => clearCache(row.title_id)} class="btn btn-secondary">Clear</button>
+                        <button onclick={() => deleteCache(row.title_id)} class="btn btn-secondary">Delete</button>
                       {/if}
                     </div>
                   </td>
@@ -793,11 +922,16 @@
     <div class="panel-head">
       <div>
         <h2>Library</h2>
-        <p>Shared cache for downloads and installs</p>
+        <p>{mode.toUpperCase()} downloaded firmware and title updates</p>
       </div>
       <div class="flex items-center gap-2">
-        <button onclick={updateLibrary} disabled={libraryState.loading || libraryState.updating} class="btn btn-primary">
-          Check updates
+        <button
+          onclick={updateLibrary}
+          disabled={libraryState.loading || libraryState.updating}
+          class="btn btn-primary"
+          title="Download newer versions of items already in Library"
+        >
+          Download updates
         </button>
         <button onclick={deleteSelectedLibrary} disabled={selectedLibraryCount === 0 || libraryState.deleting} class="btn btn-secondary">
           Delete
@@ -812,77 +946,148 @@
     {/if}
 
     <div class="min-h-0 flex-1 overflow-auto">
-        {#if libraryState.loading && libraryState.titles.length === 0}
+        {#if libraryState.loading && modeLibraryTitles.length === 0}
           <div class="empty">Loading library</div>
-        {:else if libraryState.titles.length === 0}
+        {:else if modeLibraryTitles.length === 0}
           <div class="empty">Downloaded firmware and title updates</div>
         {:else}
-          <div class="divide-y divide-border" role="tree" aria-label="Downloaded library">
-            {#each libraryState.titles as title (`${title.mode}-${title.title_id}`)}
+          <div class="divide-y divide-border text-xs" role="tree" aria-label="Downloaded library">
+            {#if firmwareLibraryTitles.length > 0}
+              {@const firmwareFiles = filesForTitles(firmwareLibraryTitles)}
+              {@const firmwareKey = `branch:${mode}:firmware`}
               <section
                 role="treeitem"
-                aria-expanded={titleExpanded(title.path)}
-                aria-selected={titleSelectionState(title) !== 'none'}
+                aria-expanded={titleExpanded(firmwareKey)}
+                aria-selected={fileSelectionState(firmwareFiles) !== 'none'}
               >
-                <div class="grid grid-cols-[1.5rem_auto_1fr_auto_auto] items-center gap-2 bg-surface px-3 py-2">
+                <div class="tree-row bg-surface px-3">
                   <button
-                    onclick={() => toggleTitleExpanded(title.path)}
+                    onclick={() => toggleTitleExpanded(firmwareKey)}
                     class="btn btn-quiet h-6 min-h-6 w-6 p-0"
-                    aria-label={`${titleExpanded(title.path) ? 'Collapse' : 'Expand'} ${title.title_id}`}
+                    aria-label={`${titleExpanded(firmwareKey) ? 'Collapse' : 'Expand'} firmware`}
                   >
-                    <span aria-hidden="true">{titleExpanded(title.path) ? '▾' : '▸'}</span>
+                    <span aria-hidden="true">{titleExpanded(firmwareKey) ? '▾' : '▸'}</span>
                   </button>
                   <input
                     type="checkbox"
-                    checked={titleSelectionState(title) === 'all'}
-                    indeterminate={titleSelectionState(title) === 'some'}
-                    aria-label={`Select ${title.title_id}`}
-                    onchange={(e) => toggleTitle(title, e.currentTarget.checked)}
+                    checked={fileSelectionState(firmwareFiles) === 'all'}
+                    indeterminate={fileSelectionState(firmwareFiles) === 'some'}
+                    aria-label={`Select ${mode} firmware`}
+                    onchange={(event) => toggleFiles(firmwareFiles, event.currentTarget.checked)}
                   />
-                  <div class="min-w-0">
-                    <div class="flex flex-wrap items-baseline gap-x-2">
-                      <span class="font-semibold text-fg-strong">{title.title_id}</span>
-                      <span class="rounded bg-surface-2 px-2 py-0.5 text-xs uppercase text-muted">{title.mode}</span>
-                      {#if title.latest_version}<span class="text-xs text-muted">Latest v{title.latest_version}</span>{/if}
-                    </div>
-                    <div class="truncate font-mono text-xs text-muted-soft" title={title.path}>{title.path}</div>
-                  </div>
-                  <div class="text-right text-xs text-muted">
-                    <div>{title.file_count} file{title.file_count === 1 ? '' : 's'}</div>
-                    <div>{formatSize(title.total_size)}</div>
-                  </div>
-                  <button onclick={() => OpenFolder(title.path)} class="btn btn-secondary">Open</button>
+                  <span class="font-mono font-semibold text-fg">firmware</span>
+                  <span class="text-muted">{firmwareFiles.length} files · {formatSize(totalFileSize(firmwareFiles))}</span>
+                  <button onclick={() => OpenFolder(firmwareLibraryTitles[0].path)} class="btn btn-secondary">Open</button>
                 </div>
 
-                {#if titleExpanded(title.path)}
+                {#if titleExpanded(firmwareKey)}
                   <div class="divide-y divide-border bg-inset" role="group">
-                    {#each title.files ?? [] as file (file.path)}
-                      <div
-                        class="grid grid-cols-[1.5rem_auto_1fr_auto] items-center gap-2 px-3 py-2 text-sm"
-                        role="treeitem"
-                        aria-selected={selected(file.path)}
-                      >
+                    {#each firmwareFiles as file (file.path)}
+                      <div class="tree-file-row pl-8 pr-3" role="treeitem" aria-selected={selected(file.path)}>
                         <span class="text-center text-muted-faint" aria-hidden="true">└</span>
                         <input
                           type="checkbox"
                           checked={selected(file.path)}
                           aria-label={`Select ${file.name}`}
-                          onchange={(e) => setSelected(file.path, e.currentTarget.checked)}
+                          onchange={(event) => setSelected(file.path, event.currentTarget.checked)}
                         />
                         <div class="min-w-0">
                           <div class="truncate text-fg" title={file.name}>{file.name}</div>
-                          <div class="truncate font-mono text-xs text-muted-soft" title={file.path}>{file.path}</div>
+                          <div class="truncate font-mono text-muted-soft" title={file.path}>{file.path}</div>
                         </div>
-                        <div class="text-right text-xs text-muted">
-                          <div>{file.kind || 'File'}</div>
-                          <div>{labelForFile(file)}</div>
-                        </div>
+                        <div class="text-right text-muted">{labelForFile(file)}</div>
                       </div>
                     {/each}
                   </div>
                 {/if}
               </section>
-            {/each}
+            {/if}
+
+            {#if gameLibraryTitles.length > 0}
+              {@const titleFiles = filesForTitles(gameLibraryTitles)}
+              {@const titleKey = `branch:${mode}:title`}
+              <section
+                role="treeitem"
+                aria-expanded={titleExpanded(titleKey)}
+                aria-selected={fileSelectionState(titleFiles) !== 'none'}
+              >
+                <div class="tree-row bg-surface px-3">
+                  <button
+                    onclick={() => toggleTitleExpanded(titleKey)}
+                    class="btn btn-quiet h-6 min-h-6 w-6 p-0"
+                    aria-label={`${titleExpanded(titleKey) ? 'Collapse' : 'Expand'} title`}
+                  >
+                    <span aria-hidden="true">{titleExpanded(titleKey) ? '▾' : '▸'}</span>
+                  </button>
+                  <input
+                    type="checkbox"
+                    checked={fileSelectionState(titleFiles) === 'all'}
+                    indeterminate={fileSelectionState(titleFiles) === 'some'}
+                    aria-label={`Select ${mode} titles`}
+                    onchange={(event) => toggleFiles(titleFiles, event.currentTarget.checked)}
+                  />
+                  <span class="font-mono font-semibold text-fg">title</span>
+                  <span class="text-muted">{gameLibraryTitles.length} folders · {formatSize(totalFileSize(titleFiles))}</span>
+                  <span></span>
+                </div>
+
+                {#if titleExpanded(titleKey)}
+                  <div class="divide-y divide-border" role="group">
+                    {#each gameLibraryTitles as title (`${title.mode}-${title.title_id}`)}
+                      <section
+                        role="treeitem"
+                        aria-expanded={titleExpanded(title.path)}
+                        aria-selected={titleSelectionState(title) !== 'none'}
+                      >
+                        <div class="tree-row bg-surface pl-7 pr-3">
+                          <button
+                            onclick={() => toggleTitleExpanded(title.path)}
+                            class="btn btn-quiet h-6 min-h-6 w-6 p-0"
+                            aria-label={`${titleExpanded(title.path) ? 'Collapse' : 'Expand'} ${title.title_id}`}
+                          >
+                            <span aria-hidden="true">{titleExpanded(title.path) ? '▾' : '▸'}</span>
+                          </button>
+                          <input
+                            type="checkbox"
+                            checked={titleSelectionState(title) === 'all'}
+                            indeterminate={titleSelectionState(title) === 'some'}
+                            aria-label={`Select ${title.title_id}`}
+                            onchange={(event) => toggleTitle(title, event.currentTarget.checked)}
+                          />
+                          <div class="min-w-0">
+                            <div class="font-semibold text-fg-strong">{title.title_id}</div>
+                            <div class="truncate font-mono text-muted-soft" title={title.path}>{title.path}</div>
+                          </div>
+                          <span class="text-muted">{title.file_count} files · {formatSize(title.total_size)}</span>
+                          <button onclick={() => OpenFolder(title.path)} class="btn btn-secondary">Open</button>
+                        </div>
+
+                        {#if titleExpanded(title.path)}
+                          <div class="divide-y divide-border bg-inset" role="group">
+                            {#each title.files ?? [] as file (file.path)}
+                              <div class="tree-file-row pl-12 pr-3" role="treeitem" aria-selected={selected(file.path)}>
+                                <span class="text-center text-muted-faint" aria-hidden="true">└</span>
+                                <input
+                                  type="checkbox"
+                                  checked={selected(file.path)}
+                                  aria-label={`Select ${file.name}`}
+                                  onchange={(event) => setSelected(file.path, event.currentTarget.checked)}
+                                />
+                                <div class="min-w-0">
+                                  <div class="truncate text-fg" title={file.name}>{file.name}</div>
+                                  <div class="truncate font-mono text-muted-soft" title={file.path}>{file.path}</div>
+                                </div>
+                                <div class="text-right text-muted">{labelForFile(file)}</div>
+                              </div>
+                            {/each}
+                          </div>
+                        {/if}
+                      </section>
+                    {/each}
+                  </div>
+                {/if}
+              </section>
+            {/if}
           </div>
         {/if}
     </div>
@@ -931,6 +1136,11 @@
     border-collapse: collapse;
   }
 
+  .data-table {
+    width: 100%;
+    font-size: 0.75rem;
+  }
+
   th {
     background: var(--c-surface-2);
     color: var(--c-muted);
@@ -943,6 +1153,35 @@
     z-index: 1;
   }
 
+  .column-resizer {
+    position: absolute;
+    top: 0;
+    right: -0.25rem;
+    z-index: 2;
+    width: 0.5rem;
+    height: 100%;
+    cursor: col-resize;
+    touch-action: none;
+    background: transparent;
+  }
+
+  .column-resizer::after {
+    content: '';
+    position: absolute;
+    top: 25%;
+    bottom: 25%;
+    left: calc(50% - 0.5px);
+    width: 1px;
+    background: var(--c-border);
+    opacity: 0;
+  }
+
+  .column-resizer:hover::after,
+  .column-resizer:focus-visible::after {
+    opacity: 1;
+    background: var(--c-accent);
+  }
+
   td {
     border-top: 1px solid var(--c-border);
     padding: 0.55rem 0.75rem;
@@ -951,6 +1190,26 @@
 
   tbody tr:hover {
     background: var(--c-surface-2);
+  }
+
+  .tree-row {
+    display: grid;
+    min-height: 2.25rem;
+    grid-template-columns: 1.5rem auto minmax(0, 1fr) auto auto;
+    align-items: center;
+    gap: 0.5rem;
+    padding-top: 0.375rem;
+    padding-bottom: 0.375rem;
+  }
+
+  .tree-file-row {
+    display: grid;
+    min-height: 2.25rem;
+    grid-template-columns: 1.5rem auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 0.5rem;
+    padding-top: 0.375rem;
+    padding-bottom: 0.375rem;
   }
 
   .empty {

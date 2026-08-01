@@ -474,8 +474,8 @@ func (a *App) SyncTitlePS3(tid string) ([]string, error) {
 	return nil, fmt.Errorf("title %s not found in library", tid)
 }
 
-// ClearTitleCache removes the cache folder for a single title.
-func (a *App) ClearTitleCache(tid string) error {
+// DeleteTitleCachePS3 removes all downloaded updates for one PS3 title.
+func (a *App) DeleteTitleCachePS3(tid string) error {
 	if err := psn.ValidateTitleID(tid); err != nil {
 		return err
 	}
@@ -488,9 +488,32 @@ func (a *App) ClearTitleCache(tid string) error {
 		return fmt.Errorf("remove cache for %s: %w", tid, err)
 	}
 	library.InvalidateInstalledVersionCache(tid)
-	a.activity.Infof("library", "Cleared cache for %s", tid)
+	a.activity.Infof("library", "Deleted cached downloads for %s", tid)
 	go a.emitDownloadLibrary()
 	return nil
+}
+
+// OpenTitleCachePS3 opens one PS3 title's downloaded-update folder.
+func (a *App) OpenTitleCachePS3(tid string) error {
+	if err := psn.ValidateTitleID(tid); err != nil {
+		return err
+	}
+	dir, err := config.TitleDirForRoot(a.cfg.Storage.LibraryDir, "ps3")
+	if err != nil {
+		return err
+	}
+	target := filepath.Join(dir, tid)
+	info, err := os.Stat(target)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return fmt.Errorf("no cached downloads for %s", tid)
+		}
+		return fmt.Errorf("open cache for %s: %w", tid, err)
+	}
+	if !info.IsDir() {
+		return fmt.Errorf("cache path for %s is not a folder", tid)
+	}
+	return a.OpenFolder(target)
 }
 
 // OpenFolder opens the given directory in the system's file manager.

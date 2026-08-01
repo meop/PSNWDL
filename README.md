@@ -52,7 +52,7 @@ PSNWDL is inspired by AphelionWasTaken's
 [PyKG](https://github.com/AphelionWasTaken/PyKG), but it is not a 1:1 clone.
 It combines PySN-style title/firmware discovery with PyKG-style PS3 package
 inspection/extraction, then adds its own persistent library, workbench UI,
-activity log, and RPCS3 reconcile/sync flow.
+activity log, and RPCS3 reconcile/download/install flow.
 
 | Capability | PySN | PyKG | PSNWDL |
 |------------|------|------|--------|

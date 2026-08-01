@@ -49,19 +49,19 @@ export function ClearActivityLog(): $CancellablePromise<void> {
     return $Call.ByID(2022669751);
 }
 
-/**
- * ClearTitleCache removes the cache folder for a single title.
- */
-export function ClearTitleCache(tid: string): $CancellablePromise<void> {
-    return $Call.ByID(2712012150, tid);
-}
-
 export function ConfigFilePath(): $CancellablePromise<string> {
     return $Call.ByID(1273835914);
 }
 
 export function DeleteLibraryItems(paths: string[]): $CancellablePromise<void> {
     return $Call.ByID(73741487, paths);
+}
+
+/**
+ * DeleteTitleCachePS3 removes all downloaded updates for one PS3 title.
+ */
+export function DeleteTitleCachePS3(tid: string): $CancellablePromise<void> {
+    return $Call.ByID(619880728, tid);
 }
 
 export function EnqueueDownload(req: jobs$0.Request): $CancellablePromise<string> {
@@ -133,6 +133,13 @@ export function ListRPCS3Library(): $CancellablePromise<rpcs3$0.Entry[]> {
  */
 export function OpenFolder(path: string): $CancellablePromise<void> {
     return $Call.ByID(3894305329, path);
+}
+
+/**
+ * OpenTitleCachePS3 opens one PS3 title's downloaded-update folder.
+ */
+export function OpenTitleCachePS3(tid: string): $CancellablePromise<void> {
+    return $Call.ByID(3379642157, tid);
 }
 
 export function PauseJob(id: string): $CancellablePromise<void> {
