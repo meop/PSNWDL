@@ -187,18 +187,18 @@ export function SearchVita(tid: string): $CancellablePromise<psn$0.Title | null>
 }
 
 /**
- * SyncAllPS3 removes title folders not represented in RPCS3, then exactly
- * synchronizes every RPCS3 title against the server.
+ * SyncAllPS3 removes title folders not represented in the already-loaded RPCS3
+ * list, then synchronizes each title without reloading games.yml.
  */
-export function SyncAllPS3(): $CancellablePromise<string[]> {
-    return $Call.ByID(2563320289).then(($result: any) => {
+export function SyncAllPS3(entries: rpcs3$0.Entry[]): $CancellablePromise<string[]> {
+    return $Call.ByID(2563320289, entries).then(($result: any) => {
         return $$createType14($result);
     });
 }
 
 /**
- * SyncTitlePS3 makes one RPCS3 title folder exactly match the PKGs advertised
- * by the server: extras are removed and missing PKGs queued.
+ * SyncTitlePS3 makes one already-loaded RPCS3 title exactly match the PKGs
+ * advertised by the server without reloading games.yml.
  */
 export function SyncTitlePS3(tid: string): $CancellablePromise<string[]> {
     return $Call.ByID(2047523786, tid).then(($result: any) => {

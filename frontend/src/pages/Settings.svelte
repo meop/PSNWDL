@@ -160,7 +160,8 @@
   }
 
   function invalidPathMessage(kind: 'library' | 'games_yml' | 'hdd0_game'): string {
-    if (kind === 'games_yml') return 'Choose a valid file path'
+    if (kind === 'games_yml') return 'Choose an existing file named games.yml'
+    if (kind === 'hdd0_game') return 'Choose an existing dev_hdd0/game folder'
     return 'Choose a valid folder path'
   }
 

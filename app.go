@@ -133,6 +133,9 @@ func (a *App) ValidateSettingsPath(kind, path string) error {
 		if info.IsDir() {
 			return fmt.Errorf("path must be a games.yml file")
 		}
+		if !strings.EqualFold(filepath.Base(filepath.Clean(path)), "games.yml") {
+			return fmt.Errorf("path must end with games.yml")
+		}
 		return nil
 	case "hdd0_game":
 		info, err := os.Stat(path)
@@ -141,6 +144,11 @@ func (a *App) ValidateSettingsPath(kind, path string) error {
 		}
 		if !info.IsDir() {
 			return fmt.Errorf("path must be a folder")
+		}
+		cleanPath := filepath.Clean(path)
+		if !strings.EqualFold(filepath.Base(cleanPath), "game") ||
+			!strings.EqualFold(filepath.Base(filepath.Dir(cleanPath)), "dev_hdd0") {
+			return fmt.Errorf("path must end with dev_hdd0%cgame", filepath.Separator)
 		}
 		return nil
 	default:
@@ -201,6 +209,16 @@ func (a *App) SaveConfig(next *config.Config) error {
 			return fmt.Errorf("resolve default library dir: %w", err)
 		}
 		next.Storage.LibraryDir = libraryDir
+	}
+	if strings.TrimSpace(next.RPCS3.GamesYML) != "" {
+		if err := a.ValidateSettingsPath("games_yml", next.RPCS3.GamesYML); err != nil {
+			return err
+		}
+	}
+	if strings.TrimSpace(next.RPCS3.HDD0Game) != "" {
+		if err := a.ValidateSettingsPath("hdd0_game", next.RPCS3.HDD0Game); err != nil {
+			return err
+		}
 	}
 	if strings.TrimSpace(next.Storage.LibraryDir) != strings.TrimSpace(a.cfg.Storage.LibraryDir) {
 		if err := a.ValidateSettingsPath("library", next.Storage.LibraryDir); err != nil {
@@ -316,29 +334,15 @@ func (a *App) ReconcileTitlePS3(entry rpcs3.Entry) library.Row {
 	return row
 }
 
-// SyncTitlePS3 makes one RPCS3 title folder exactly match the PKGs advertised
-// by the server: extras are removed and missing PKGs queued.
+// SyncTitlePS3 makes one already-loaded RPCS3 title exactly match the PKGs
+// advertised by the server without reloading games.yml.
 func (a *App) SyncTitlePS3(tid string) ([]string, error) {
-	entries, err := a.ListRPCS3Library()
-	if err != nil {
-		return nil, err
-	}
-
-	for _, entry := range entries {
-		if entry.TitleID == tid {
-			return a.syncRPCS3Title(entry)
-		}
-	}
-	return nil, fmt.Errorf("title %s not found in RPCS3", tid)
+	return a.syncRPCS3Title(rpcs3.Entry{TitleID: tid})
 }
 
-// SyncAllPS3 removes title folders not represented in RPCS3, then exactly
-// synchronizes every RPCS3 title against the server.
-func (a *App) SyncAllPS3() ([]string, error) {
-	entries, err := a.ListRPCS3Library()
-	if err != nil {
-		return nil, err
-	}
+// SyncAllPS3 removes title folders not represented in the already-loaded RPCS3
+// list, then synchronizes each title without reloading games.yml.
+func (a *App) SyncAllPS3(entries []rpcs3.Entry) ([]string, error) {
 	if err := a.removeNonRPCS3TitleFolders(entries); err != nil {
 		return nil, err
 	}

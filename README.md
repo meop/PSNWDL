@@ -173,6 +173,12 @@ default_mode = "ps3"        # ps3 | ps4 | psvita | ps5
 default_download = "firmware" # firmware | title
 ```
 
+The first-run file and every file saved through Settings contain the complete
+configuration, including default-valued fields. A manually shortened file is
+accepted: omitted fields receive defaults in memory and are written out on the
+next Settings save. RPCS3 paths selected in Settings must point to an existing
+`games.yml` file and an existing `dev_hdd0/game` directory.
+
 `home_dir` is exposed to the UI (resolved at runtime) but never persisted.
 `verify_tls` is kept in the config file for advanced diagnostics; the Settings
 UI leaves it off because several Sony endpoints use certificates that fail

@@ -83,12 +83,14 @@ module root to regenerate the TS models/bindings, then rebuild.
    with the right scope so the Activity console narrates it. A scope offered
    as a filter chip with no producer is a dead UI element.
 
-9. **The four workbench panes refresh independently.** Download search and
-   Emulator reconciliation are manual-only through their Search and Refresh
-   controls. Platform changes refresh only the local Library. Library changes
-   may recompute already-cached Download/Emulator row state, but must not parse
-   `games.yml` or make PSN requests. Every completed job refreshes Library. Do
-   not add file watching, periodic reconciliation, or cross-pane network refreshes.
+9. **The four workbench panes refresh independently.** Emulator reconciliation
+   runs once at application startup, then only through its Refresh control.
+   Download discovery runs only through Search. Platform changes refresh only
+   the local Library. Library changes may recompute already-cached
+   Download/Emulator row state, but must not parse `games.yml` or make PSN
+   requests. Sync actions use the already-loaded Emulator rows. Every completed
+   job refreshes Library. Do not add file watching, periodic reconciliation, or
+   cross-pane network refreshes.
 
 10. **The queue is application-wide and belongs to Activity.** Download and
     Emulator actions share one backend queue and one concurrency limit. Show

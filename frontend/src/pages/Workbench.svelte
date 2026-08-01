@@ -23,6 +23,7 @@
   import type * as config from '../../bindings/PSNWDL/internal/config'
   import type * as downloads from '../../bindings/PSNWDL/internal/downloads'
   import * as library from '../../bindings/PSNWDL/internal/library'
+  import * as rpcs3 from '../../bindings/PSNWDL/internal/rpcs3'
   import { cache, ensureFirmware, fetching } from '../app/firmwareStore.svelte'
   import { jobsList } from '../app/jobsStore.svelte'
   import { libraryState as emulatorState } from '../app/libraryStore.svelte'
@@ -94,7 +95,9 @@
       libraryState.initialized = true
       await refreshLibrary()
     }
+    const firstEmulatorLoad = !emulatorState.initialized
     await ensureEmulatorBooted()
+    if (firstEmulatorLoad) await refreshEmulator(true)
   })
 
   $effect(() => {
@@ -314,8 +317,8 @@
     }
   }
 
-  async function refreshEmulator() {
-    if (mode !== 'ps3') return
+  async function refreshEmulator(initialLoad = false) {
+    if (mode !== 'ps3' && !initialLoad) return
     if (isMissingGamesConfig()) {
       emulatorState.rows = []
       emulatorState.loadError = null
@@ -389,7 +392,10 @@
     syncingAll = true
     emulatorError = null
     try {
-      const jobIDs = (await SyncAllPS3()) ?? []
+      const entries = emulatorState.rows.map(
+        (row) => new rpcs3.Entry({ title_id: row.title_id, install_dir: row.install_dir })
+      )
+      const jobIDs = (await SyncAllPS3(entries)) ?? []
       trackEmulatorJobs(jobIDs)
     } catch (e) {
       emulatorError = e instanceof Error ? e.message : String(e)
@@ -495,6 +501,22 @@
 
   function isMissingInstallConfig(): boolean {
     return !emulatorState.hdd0Input
+  }
+
+  function syncAllTooltip(): string {
+    if (isMissingGamesConfig()) return 'Set games.yml in Settings before syncing'
+    if (emulatorState.loadError) return 'Refresh the Emulator list before syncing'
+    if (emulatorRefreshing) return 'The Emulator list is refreshing'
+    if (syncingAll) return 'Sync all is in progress'
+    return 'Make the PS3 title library exactly match the loaded RPCS3 titles and PSN updates'
+  }
+
+  function installPKGsTooltip(): string {
+    if (isMissingInstallConfig()) return 'Set dev_hdd0/game in Settings before installing PKGs'
+    if (installingPKGs) return 'PKG installation is in progress'
+    if (pendingPKGError) return pendingPKGError
+    if (pendingPKGCount === 0) return 'No Library PKGs need installation'
+    return `Install ${pendingPKGCount} Library PKG(s) newer than RPCS3's installed versions`
   }
 
   function selected(path: string): boolean {
@@ -800,9 +822,9 @@
         <div class="flex flex-wrap items-center justify-end gap-2">
           <button
             onclick={syncAllNeeded}
-            disabled={syncingAll || isMissingGamesConfig()}
+            disabled={syncingAll || emulatorRefreshing || isMissingGamesConfig() || Boolean(emulatorState.loadError)}
             class="btn btn-primary"
-            title="Make the PS3 title library exactly match the titles and updates listed by RPCS3 and PSN"
+            title={syncAllTooltip()}
           >
             {syncingAll ? 'Syncing all' : 'Sync all'}
           </button>
@@ -810,13 +832,11 @@
             onclick={installLibraryPKGs}
             disabled={installingPKGs || pendingPKGCount === 0 || isMissingInstallConfig()}
             class="btn btn-secondary"
-            title={pendingPKGError || (pendingPKGCount > 0
-              ? `Install ${pendingPKGCount} Library PKG(s) newer than RPCS3's installed versions`
-              : 'No Library PKGs need installation')}
+            title={installPKGsTooltip()}
           >
             {installingPKGs ? 'Installing PKGs' : 'Install PKGs'}
           </button>
-          <button onclick={refreshEmulator} disabled={emulatorRefreshing || isMissingGamesConfig()} class="btn btn-secondary">
+          <button onclick={() => refreshEmulator()} disabled={emulatorRefreshing || isMissingGamesConfig()} class="btn btn-secondary">
             {emulatorRefreshing ? 'Refreshing' : 'Refresh'}
           </button>
         </div>
