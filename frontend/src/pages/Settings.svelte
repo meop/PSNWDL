@@ -8,8 +8,8 @@
     PickGamesYML,
     SaveConfig,
     ValidateSettingsPath,
-  } from '../../wailsjs/go/main/App'
-  import { config } from '../../wailsjs/go/models'
+  } from '../../bindings/PSNWDL/app'
+  import * as config from '../../bindings/PSNWDL/internal/config'
   import { MODES } from '../app/types'
   import { theme } from '../app/theme.svelte'
   import Loading from '../components/Loading.svelte'

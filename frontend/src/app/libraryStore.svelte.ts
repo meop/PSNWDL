@@ -1,5 +1,5 @@
-import { config } from '../../wailsjs/go/models'
-import type { library } from '../../wailsjs/go/models'
+import * as config from '../../bindings/PSNWDL/internal/config'
+import type * as library from '../../bindings/PSNWDL/internal/library'
 
 export const libraryState = $state({
   cfg: null as config.Config | null,

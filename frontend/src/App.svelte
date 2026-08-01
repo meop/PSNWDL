@@ -1,9 +1,9 @@
 <script lang="ts">
   import { onMount, untrack } from 'svelte'
   import { MODES, type Mode } from './app/types'
-  import { GetConfig, SetActiveMode } from '../wailsjs/go/main/App'
-  import { EventsOn } from '../wailsjs/runtime/runtime'
-  import { config } from '../wailsjs/go/models'
+  import { GetConfig, SetActiveMode } from '../bindings/PSNWDL/app'
+  import { Events } from '@wailsio/runtime'
+  import * as config from '../bindings/PSNWDL/internal/config'
   import { theme, type Theme } from './app/theme.svelte'
   import { wireJobEvents, hydrateJobs, aggregate, formatETA, formatThroughput } from './app/jobsStore.svelte'
   import { wireActivityEvents, hydrateActivityLog } from './app/activityStore.svelte'
@@ -46,7 +46,7 @@
   })
 
   $effect(() => {
-    const off = EventsOn('config:updated', (cfg: config.Config) => {
+    const off = Events.On('config:updated', ({ data: cfg }) => {
       appConfig = cfg
       applyConfigPreferences(cfg, false)
     })

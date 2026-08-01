@@ -1,4 +1,4 @@
-import type { downloads } from '../../wailsjs/go/models'
+import type * as downloads from '../../bindings/PSNWDL/internal/downloads'
 
 export const downloadLibraryState = $state({
   titles: [] as downloads.Title[],

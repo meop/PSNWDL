@@ -5,13 +5,18 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "build:dev": "vite build --minify false --mode development",
     "build": "vite build",
     "preview": "vite preview",
     "check": "svelte-check --tsconfig ./tsconfig.json"
   },
+  "dependencies": {
+    "@wailsio/runtime": "latest"
+  },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^7.1.2",
     "@tailwindcss/vite": "^4.0.0",
+    "@types/node": "^24.0.0",
     "svelte": "^5.55.9",
     "svelte-check": "^4.4.8",
     "tailwindcss": "^4.0.0",

@@ -76,15 +76,15 @@ activity log, and RPCS3 reconcile/sync flow.
 
 | Tool | Version | Why |
 |------|---------|-----|
-| [Go](https://go.dev/dl/) | ≥ 1.22 | backend |
+| [Go](https://go.dev/dl/) | ≥ 1.25 | backend and the pinned Wails 3 toolchain |
 | [Node.js](https://nodejs.org/) | ≥ 20 | frontend toolchain |
 | [pnpm](https://pnpm.io/) | ≥ 9 | frontend package manager |
-| [Wails CLI](https://wails.io) | v2 | build / dev harness |
+| [Wails CLI](https://v3.wails.io) | v3 | build / dev harness |
 
 Install the Wails CLI once:
 
 ```sh
-go install github.com/wailsapp/wails/v2/cmd/wails@latest
+go install github.com/wailsapp/wails/v3/cmd/wails3@latest
 ```
 
 ### Runtime prerequisites
@@ -103,22 +103,23 @@ go install github.com/wailsapp/wails/v2/cmd/wails@latest
 ### Live development (hot reload)
 
 ```sh
-wails dev
+wails3 dev
 ```
 
-Runs the Vite dev server with hot reload. The Go backend methods are reachable
-from the rendered app exactly as in a production build. A browser-accessible
-dev server also runs on `http://localhost:34115`.
+Runs the Vite dev server with hot reload and launches the native application.
+The development server listens on `http://127.0.0.1:9245`; the Wails window
+connects to it automatically.
 
 ### Production build
 
 ```sh
-wails build
+wails3 build
 ```
 
-Outputs a platform-native binary/installer into `build/bin/` (`.exe` / `.app` /
-`.deb`/`.rpm`/AppImage depending on host OS). Cross-compilation to other OSes
-is not supported by Wails v2 — build on the target platform.
+Outputs the platform-native binary into `bin/`. Run `wails3 task package` to
+create the host platform's installer/package. The generated Wails 3 Taskfiles
+also provide Docker-backed cross-compilation tasks where the target requires
+platform tooling.
 
 ---
 
@@ -128,7 +129,10 @@ is not supported by Wails v2 — build on the target platform.
 PSNWDL/
 ├── app.go                 # Wails-bound methods (the app's public API surface)
 ├── main.go                # Wails app bootstrap
-├── wails.json             # Wails project config
+├── Taskfile.yml           # Wails 3 build/dev/package entry points
+├── build/
+│   ├── config.yml         # product metadata + dev-mode configuration
+│   └── {windows,darwin,linux}/ # platform Taskfiles and packaging assets
 ├── internal/
 │   ├── activity/          # in-memory log ring buffer + event emitter
 │   ├── config/            # config.toml load/save, defaults, path helpers
@@ -145,7 +149,7 @@ PSNWDL/
     │   ├── App.svelte     # shell: mode selector, settings/about overlays
     │   ├── main.ts        # mount + pre-paint config load (no theme flash)
     │   └── style.css      # semantic color tokens (@theme inline) for theming
-    └── wailsjs/           # generated TS bindings for Go (do not hand-edit)
+    └── bindings/          # generated Wails 3 TS bindings (do not hand-edit)
 ```
 
 ---
@@ -201,11 +205,12 @@ RPCS3 is an explicit Emulator action.
 ## How the API surface is wired
 
 The frontend calls Go exclusively through Wails-generated bindings in
-`frontend/wailsjs/go/main/App.*`. Every `func (a *App)` in `app.go` becomes a
-typed TS function. If you change a Go signature or add/remove a method:
+`frontend/bindings/PSNWDL/`. `main.go` registers `App` as a Wails service, and
+every exported `func (a *App)` in `app.go` becomes a typed TS function. If you
+change a Go signature or add/remove a method:
 
 ```sh
-wails generate module   # regenerate the TS bindings + models.ts
+wails3 generate bindings -clean=true -ts
 ```
 
 This must exit `0`. If it prints `Not found: time.Time`, a struct field is
@@ -217,9 +222,12 @@ using `time.Time` (or another unmapped type) — use an RFC3339 `string` instead
 ## Verifying a clean build
 
 ```sh
-go build ./... && go vet ./... && go test ./...
-wails generate module                      # exit 0
+go build ./...
+go vet ./...
+go test ./...
+wails3 generate bindings -clean=true -ts
 cd frontend && pnpm install && pnpm run build && pnpm run check
+cd .. && wails3 build
 ```
 
 `pnpm run check` should report **0 errors and 0 warnings**. If it doesn't, fix

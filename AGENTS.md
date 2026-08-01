@@ -10,9 +10,12 @@ left behind that we then had to clean up.
 ## The one command that defines "done"
 
 ```sh
-go build ./... && go vet ./... && go test ./... && \
-wails generate module && \
+go build ./...
+go vet ./...
+go test ./...
+wails3 generate bindings -clean=true -ts
 cd frontend && pnpm run build && pnpm run check
+cd .. && wails3 build
 ```
 
 A change is not finished until **all** of these pass, and `pnpm run check`
@@ -20,25 +23,17 @@ reports **`0 errors and 0 warnings`**. The "0 warnings" part is non-negotiable �
 warnings accumulate into the visual/behavioral bugs this project was created to
 fix. If you can't get to 0/0, say so explicitly rather than declaring success.
 
-Node is not on PATH on this machine; it lives at
-`C:\Users\marshall\AppData\Local\pnpm\bin`. Prefix shell commands with:
-
-```sh
-export PATH="/c/Users/marshall/AppData/Local/pnpm/bin:/c/Program Files/Go/bin:$PATH"
-```
-
----
-
 ## Architecture in one paragraph
 
-Wails v2 desktop app. **Backend = Go** (`app.go` + `internal/*`). **Frontend =
+Wails v3 desktop app. **Backend = Go** (`app.go` + `internal/*`). **Frontend =
 Svelte 5 + TypeScript + Tailwind v4** (`frontend/src/*`). The two halves meet
-only through Wails-generated bindings in `frontend/wailsjs/` — the frontend
+only through Wails-generated bindings in `frontend/bindings/` — the frontend
 never imports Go directly, and Go never imports frontend code. Every public
 method is `func (a *App) ...` in `app.go`; events flow Go → frontend via
-`emitter.Emit(name, payload)` and are subscribed with `EventsOn(name, ...)`.
-After **any** change to a Go struct or `App` method, run `wails generate module`
-to regenerate the TS models/bindings, then rebuild.
+`application.App.Event.Emit(name, payload)` and are subscribed with
+`Events.On(name, ...)`. After **any** change to a Go struct, service method, or
+registered event type, run `wails3 generate bindings -clean=true -ts` from the
+module root to regenerate the TS models/bindings, then rebuild.
 
 ---
 
@@ -130,10 +125,10 @@ These all happened in a prior pass and were fixed — they tend to recur:
 - **Stubs that aren't wired.** A type/interface/store/component exists but no
   caller uses it (dead `aggregateStatus`, never-imported `<Loading>`,
   never-emitted activity scopes). Existence ≠ done. Grep for call sites.
-- **Backend change without `wails generate module`.** The TS bindings go stale
+- **Backend change without `wails3 generate bindings -clean=true -ts`.** The TS bindings go stale
   and the frontend compiles against ghosts. Always regenerate + rebuild.
 - **`go test` passing declared as success.** Tests cover unit logic, not the
-  wiring. A fully-built, type-checked, 0-warning frontend + `wails generate`
+  wiring. A fully-built, type-checked, 0-warning frontend + binding generation
   exit 0 is the real gate.
 - **Platform assumptions.** Hardcoded `explorer`, hardcoded `~` expansion that
   only works in one shell, etc. Default to cross-platform.
@@ -144,7 +139,7 @@ These all happened in a prior pass and were fixed — they tend to recur:
 
 | You want to… | Look at |
 |---|---|
-| Add a backend method the UI can call | `app.go` (add `func (a *App)…`), then `wails generate module` |
+| Add a backend method the UI can call | `app.go` (add `func (a *App)…`), then regenerate Wails 3 bindings |
 | Add a download-related feature | `internal/jobs/queue.go` + `types.go` |
 | Change a PSN endpoint / add a console | `internal/psn/` (`ps3.go`, `ps4.go`, `vita.go`, `firmware.go`) |
 | Touch PKG parsing/extraction | `internal/pkg/` (`header.go`, `decrypt.go`, `extract.go`, `sfo.go`) |

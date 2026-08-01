@@ -13,7 +13,7 @@ import (
 	"sync"
 	"time"
 
-	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
+	"github.com/wailsapp/wails/v3/pkg/application"
 
 	"PSNWDL/internal/activity"
 	"PSNWDL/internal/config"
@@ -27,6 +27,7 @@ import (
 
 type App struct {
 	ctx         context.Context
+	wailsApp    *application.App
 	cfg         *config.Config
 	cfgPath     string
 	psn         *psn.Client
@@ -40,11 +41,11 @@ type App struct {
 	lastEmuJSON string
 }
 
-func NewApp() *App {
-	return &App{}
+func NewApp(wailsApp *application.App) *App {
+	return &App{wailsApp: wailsApp}
 }
 
-func (a *App) startup(ctx context.Context) {
+func (a *App) ServiceStartup(ctx context.Context, _ application.ServiceOptions) error {
 	a.ctx = ctx
 
 	path, err := config.ConfigPath()
@@ -62,7 +63,7 @@ func (a *App) startup(ctx context.Context) {
 		}
 	}
 
-	emitter := &wailsEmitter{ctx: ctx}
+	emitter := &wailsEmitter{app: a.wailsApp}
 	a.activity = activity.NewSink(emitter)
 	if err := ensureConfigLibraryDir(a.cfg); err != nil {
 		log.Printf("library dir: %v", err)
@@ -75,9 +76,15 @@ func (a *App) startup(ctx context.Context) {
 	}
 
 	a.startStateWatcher()
+	return nil
 }
 
-func (a *App) GetConfig() *config.Config { return a.cfg }
+func (a *App) GetConfig() config.Config {
+	if a.cfg == nil {
+		return *config.Default()
+	}
+	return *a.cfg
+}
 
 func (a *App) ConfigFilePath() string { return a.cfgPath }
 
@@ -86,22 +93,30 @@ func (a *App) PickDirectory(title, defaultDirectory string) (string, error) {
 		defaultDirectory = a.cfg.Storage.LibraryDir
 	}
 	defaultDirectory = existingDirectory(defaultDirectory)
-	return wailsruntime.OpenDirectoryDialog(a.ctx, wailsruntime.OpenDialogOptions{
-		Title:            title,
-		DefaultDirectory: defaultDirectory,
-	})
+	dialog := a.wailsApp.Dialog.OpenFile().
+		SetTitle(title).
+		SetDirectory(defaultDirectory).
+		CanChooseFiles(false).
+		CanChooseDirectories(true)
+	if window := a.wailsApp.Window.Current(); window != nil {
+		dialog.AttachToWindow(window)
+	}
+	return dialog.PromptForSingleSelection()
 }
 
 func (a *App) PickGamesYML(defaultDirectory string) (string, error) {
 	defaultDirectory = existingDirectory(defaultDirectory)
-	return wailsruntime.OpenFileDialog(a.ctx, wailsruntime.OpenDialogOptions{
-		Title:            "Select RPCS3 games.yml",
-		DefaultDirectory: defaultDirectory,
-		Filters: []wailsruntime.FileFilter{
-			{DisplayName: "YAML files (*.yml;*.yaml)", Pattern: "*.yml;*.yaml"},
-			{DisplayName: "All files (*.*)", Pattern: "*.*"},
-		},
-	})
+	dialog := a.wailsApp.Dialog.OpenFile().
+		SetTitle("Select RPCS3 games.yml").
+		SetDirectory(defaultDirectory).
+		CanChooseFiles(true).
+		CanChooseDirectories(false).
+		AddFilter("YAML files (*.yml;*.yaml)", "*.yml;*.yaml").
+		AddFilter("All files (*.*)", "*.*")
+	if window := a.wailsApp.Window.Current(); window != nil {
+		dialog.AttachToWindow(window)
+	}
+	return dialog.PromptForSingleSelection()
 }
 
 func (a *App) ValidateSettingsPath(kind, path string) error {
@@ -208,7 +223,7 @@ func (a *App) SaveConfig(next *config.Config) error {
 		return err
 	}
 	a.cfg = next
-	wailsruntime.EventsEmit(a.ctx, "config:updated", a.cfg)
+	a.wailsApp.Event.Emit("config:updated", *a.cfg)
 	a.psn = psn.NewClient(a.cfg.Network, a.activity)
 	a.jobs.SetLibraryDir(a.cfg.Storage.LibraryDir)
 	a.jobs.SetNetwork(a.cfg.Network)
@@ -611,7 +626,7 @@ func (a *App) evaluateDownloadLibrary(force bool) {
 
 	titles, err := downloads.Scan(a.cfg.Storage.LibraryDir)
 	if err != nil {
-		wailsruntime.EventsEmit(a.ctx, "downloads:error", err.Error())
+		a.wailsApp.Event.Emit("downloads:error", err.Error())
 		return
 	}
 	payload, _ := json.Marshal(titles)
@@ -625,7 +640,7 @@ func (a *App) evaluateDownloadLibrary(force bool) {
 	a.watchMu.Unlock()
 
 	if changed {
-		wailsruntime.EventsEmit(a.ctx, "downloads:updated", titles)
+		a.wailsApp.Event.Emit("downloads:updated", titles)
 	}
 }
 
@@ -647,7 +662,7 @@ func (a *App) evaluateEmulatorLibrary(force bool) {
 
 	rows, err := a.ReconcileLibraryPS3()
 	if err != nil {
-		wailsruntime.EventsEmit(a.ctx, "library:error", err.Error())
+		a.wailsApp.Event.Emit("library:error", err.Error())
 		return
 	}
 	payload, _ := json.Marshal(rows)
@@ -661,7 +676,7 @@ func (a *App) evaluateEmulatorLibrary(force bool) {
 	a.watchMu.Unlock()
 
 	if changed {
-		wailsruntime.EventsEmit(a.ctx, "library:updated", rows)
+		a.wailsApp.Event.Emit("library:updated", rows)
 	}
 }
 
@@ -728,12 +743,12 @@ func downloadInventorySignature(root string) string {
 	return b.String()
 }
 
-// wailsEmitter adapts wails runtime event emission to the jobs.Emitter shape.
-type wailsEmitter struct{ ctx context.Context }
+// wailsEmitter adapts Wails application events to the jobs.Emitter shape.
+type wailsEmitter struct{ app *application.App }
 
 func (e *wailsEmitter) Emit(event string, data any) {
-	if e.ctx == nil {
+	if e.app == nil {
 		return
 	}
-	wailsruntime.EventsEmit(e.ctx, event, data)
+	e.app.Event.Emit(event, data)
 }

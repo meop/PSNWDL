@@ -2,4 +2,4 @@
 
 - Download and library workflows.
 - Emulator sync behavior.
-- Investigate the current `wails.localhost:34115` response.
+- Verify the Wails 3 development host at `127.0.0.1:9245`.

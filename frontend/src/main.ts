@@ -1,9 +1,9 @@
 import { mount } from 'svelte'
 import './style.css'
 import App from './App.svelte'
-import { GetConfig } from '../wailsjs/go/main/App'
+import { GetConfig } from '../bindings/PSNWDL/app'
 import { theme, type Theme } from './app/theme.svelte'
-import type { config } from '../wailsjs/go/models'
+import type * as config from '../bindings/PSNWDL/internal/config'
 
 const target = document.getElementById('app')
 if (!target) throw new Error('#app not found')

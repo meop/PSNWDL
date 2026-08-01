@@ -1,7 +1,7 @@
 import { writable, derived, get } from 'svelte/store'
-import { ListJobs } from '../../wailsjs/go/main/App'
-import { EventsOn } from '../../wailsjs/runtime/runtime'
-import type { jobs } from '../../wailsjs/go/models'
+import { ListJobs } from '../../bindings/PSNWDL/app'
+import { Events } from '@wailsio/runtime'
+import type * as jobs from '../../bindings/PSNWDL/internal/jobs'
 
 type Job = jobs.Job
 
@@ -30,9 +30,9 @@ function upsert(j: Job) {
 export function wireJobEvents() {
   if (wired) return
   wired = true
-  EventsOn('job:added', (j: Job) => upsert(j))
-  EventsOn('job:state', (j: Job) => upsert(j))
-  EventsOn('job:progress', (j: Job) => upsert(j))
+  Events.On('job:added', ({ data }) => upsert(data))
+  Events.On('job:state', ({ data }) => upsert(data))
+  Events.On('job:progress', ({ data }) => upsert(data))
 }
 
 /** Hydrate from backend (call once at boot). */

@@ -1,6 +1,6 @@
 import { writable, derived, get } from 'svelte/store'
-import type { psn } from '../../wailsjs/go/models'
-import { ListFirmware } from '../../wailsjs/go/main/App'
+import type * as psn from '../../bindings/PSNWDL/internal/psn'
+import { ListFirmware } from '../../bindings/PSNWDL/app'
 import type { Mode } from './types'
 
 // Per-mode firmware cache with a freshness timestamp, so switching
@@ -37,6 +37,7 @@ export async function ensureFirmware(mode: Mode, force = false): Promise<void> {
   fetching.set(mode)
   try {
     const list = await ListFirmware(mode)
+    if (!list) throw new Error(`No firmware list returned for ${mode}`)
     cache.update((c) => ({ ...c, [mode]: { list, fetchedAt: Date.now() } }))
   } finally {
     fetching.set(null)

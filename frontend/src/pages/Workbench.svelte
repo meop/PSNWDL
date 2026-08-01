@@ -18,10 +18,13 @@
     SearchVita,
     SyncTitlePS3,
     UpdateDownloadLibrary,
-  } from '../../wailsjs/go/main/App'
-  import { EventsOn } from '../../wailsjs/runtime/runtime'
-  import { jobs, psn } from '../../wailsjs/go/models'
-  import type { config, downloads, library } from '../../wailsjs/go/models'
+  } from '../../bindings/PSNWDL/app'
+  import { Events } from '@wailsio/runtime'
+  import * as jobs from '../../bindings/PSNWDL/internal/jobs'
+  import * as psn from '../../bindings/PSNWDL/internal/psn'
+  import type * as config from '../../bindings/PSNWDL/internal/config'
+  import type * as downloads from '../../bindings/PSNWDL/internal/downloads'
+  import type * as library from '../../bindings/PSNWDL/internal/library'
   import { cache, ensureFirmware, fetching } from '../app/firmwareStore.svelte'
   import { jobsList } from '../app/jobsStore.svelte'
   import { libraryState as emulatorState } from '../app/libraryStore.svelte'
@@ -102,18 +105,18 @@
 
   $effect(() => {
     const offs = [
-      EventsOn('library:updated', (next: library.Row[]) => {
+      Events.On('library:updated', ({ data: next }) => {
         emulatorState.rows = Array.isArray(next) ? next : []
       }),
-      EventsOn('library:error', (msg: string) => {
+      Events.On('library:error', ({ data: msg }) => {
         emulatorState.loadError = isMissingEmulatorConfig() ? null : msg
       }),
-      EventsOn('downloads:updated', (next: downloads.Title[]) => {
+      Events.On('downloads:updated', ({ data: next }) => {
         libraryState.titles = Array.isArray(next) ? next : []
         libraryState.loading = false
         pruneLibrarySelection()
       }),
-      EventsOn('downloads:error', (msg: string) => {
+      Events.On('downloads:error', ({ data: msg }) => {
         libraryState.error = msg
         libraryState.loading = false
       }),

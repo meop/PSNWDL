@@ -1,9 +1,4 @@
 import { writable, get } from 'svelte/store'
-import {
-  WindowSetDarkTheme,
-  WindowSetLightTheme,
-  WindowSetSystemDefaultTheme,
-} from '../../wailsjs/runtime/runtime'
 
 export type Theme = 'system' | 'dark' | 'light'
 
@@ -19,17 +14,6 @@ export function resolveTheme(theme: Theme): 'dark' | 'light' {
 /** Set `data-theme` on <html> to drive the CSS variable palette. */
 export function applyTheme(theme: Theme) {
   document.documentElement.setAttribute('data-theme', resolveTheme(theme))
-  try {
-    if (theme === 'system') {
-      WindowSetSystemDefaultTheme()
-    } else if (theme === 'dark') {
-      WindowSetDarkTheme()
-    } else {
-      WindowSetLightTheme()
-    }
-  } catch {
-    /* Runtime theme APIs are available inside Wails, but not in browser preview. */
-  }
 }
 
 /**

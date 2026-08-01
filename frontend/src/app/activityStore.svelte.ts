@@ -1,7 +1,7 @@
 import { derived, writable } from 'svelte/store'
-import { ActivityLog, ClearActivityLog } from '../../wailsjs/go/main/App'
-import { EventsOn } from '../../wailsjs/runtime/runtime'
-import type { activity } from '../../wailsjs/go/models'
+import { ActivityLog, ClearActivityLog } from '../../bindings/PSNWDL/app'
+import { Events } from '@wailsio/runtime'
+import type * as activity from '../../bindings/PSNWDL/internal/activity'
 
 export type LogEntry = activity.Entry
 
@@ -16,7 +16,7 @@ export async function hydrateActivityLog(): Promise<void> {
 export function wireActivityEvents(): void {
   if (wired) return
   wired = true
-  EventsOn('activity:log', (entry: LogEntry) => {
+  Events.On('activity:log', ({ data: entry }) => {
     activityEntries.update((entries) => [...entries, entry].slice(-9000))
   })
 }

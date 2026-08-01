@@ -1,4 +1,4 @@
-import type { psn } from '../../wailsjs/go/models'
+import type * as psn from '../../bindings/PSNWDL/internal/psn'
 import type { Mode } from './types'
 
 export interface SearchState {
