@@ -1,7 +1,9 @@
 package downloads
 
 import (
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
@@ -39,22 +41,34 @@ func Scan(root string) ([]Title, error) {
 
 	titles := []Title{}
 	for _, mode := range []string{"ps3", "ps4", "ps5", "psvita"} {
-		updatesDir, err := config.UpdatesDirForRoot(root, mode)
+		firmwareDir, err := config.FirmwareDirForRoot(root, mode)
 		if err != nil {
 			return nil, err
 		}
-		entries, err := os.ReadDir(updatesDir)
+		firmware, err := scanTitle(mode, firmwareDir, "firmware")
+		if err != nil && !errors.Is(err, fs.ErrNotExist) {
+			return nil, err
+		}
+		if err == nil && firmware.FileCount > 0 {
+			titles = append(titles, firmware)
+		}
+
+		titleDir, err := config.TitleDirForRoot(root, mode)
+		if err != nil {
+			return nil, err
+		}
+		entries, err := os.ReadDir(titleDir)
 		if err != nil {
 			if os.IsNotExist(err) {
 				continue
 			}
-			return nil, fmt.Errorf("read %s: %w", updatesDir, err)
+			return nil, fmt.Errorf("read %s: %w", titleDir, err)
 		}
 		for _, entry := range entries {
 			if !entry.IsDir() {
 				continue
 			}
-			title, err := scanTitle(mode, filepath.Join(updatesDir, entry.Name()), entry.Name())
+			title, err := scanTitle(mode, filepath.Join(titleDir, entry.Name()), entry.Name())
 			if err != nil {
 				return nil, err
 			}
@@ -150,8 +164,18 @@ func Delete(root string, targets []string) error {
 		if err := os.RemoveAll(absTarget); err != nil {
 			return fmt.Errorf("delete %s: %w", target, err)
 		}
+		pruneEmptyParents(filepath.Dir(absTarget), root)
 	}
 	return nil
+}
+
+func pruneEmptyParents(dir, root string) {
+	for dir != root {
+		if err := os.Remove(dir); err != nil {
+			return
+		}
+		dir = filepath.Dir(dir)
+	}
 }
 
 func versionFromName(titleID, name string) string {

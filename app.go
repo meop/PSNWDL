@@ -51,6 +51,13 @@ func (a *App) ServiceStartup(ctx context.Context, _ application.ServiceOptions) 
 			a.cfg = config.Default()
 		} else {
 			a.cfg = cfg
+			if migrated, migrateErr := config.MigrateLibraryLayout(a.cfg); migrateErr != nil {
+				log.Printf("library migration: %v", migrateErr)
+			} else if migrated {
+				if saveErr := config.Save(path, a.cfg); saveErr != nil {
+					log.Printf("save migrated config: %v", saveErr)
+				}
+			}
 		}
 	}
 
@@ -428,10 +435,10 @@ func (a *App) ReconcileLibraryPS3() ([]library.Row, error) {
 }
 
 // SyncTitlePS3 enqueues only the missing updates for a single title.
-func (a *App) SyncTitlePS3(tid string) error {
+func (a *App) SyncTitlePS3(tid string) ([]string, error) {
 	entries, err := a.ListRPCS3Library()
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	for _, e := range entries {
@@ -442,24 +449,29 @@ func (a *App) SyncTitlePS3(tid string) error {
 		cached, _ := library.HighestCachedVersionIn(a.cfg.Storage.LibraryDir, "ps3", tid)
 		title, err := a.psn.LookupPS3(a.ctx, tid)
 		if err != nil {
-			return err
+			return nil, err
 		}
 
+		jobIDs := []string{}
 		for _, u := range title.Updates {
 			if library.CompareVersion(u.Version, cached) <= 0 {
 				continue
 			}
-			_, _ = a.EnqueueDownload(jobs.Request{
+			jobID, err := a.EnqueueDownload(jobs.Request{
 				TitleID:   tid,
 				TitleName: title.Name,
 				Mode:      "ps3",
 				Update:    u,
 			})
+			if err != nil {
+				return jobIDs, err
+			}
+			jobIDs = append(jobIDs, jobID)
 		}
-		return nil
+		return jobIDs, nil
 	}
 
-	return fmt.Errorf("title %s not found in library", tid)
+	return nil, fmt.Errorf("title %s not found in library", tid)
 }
 
 // ClearTitleCache removes the cache folder for a single title.
@@ -467,7 +479,7 @@ func (a *App) ClearTitleCache(tid string) error {
 	if err := psn.ValidateTitleID(tid); err != nil {
 		return err
 	}
-	dir, err := config.UpdatesDirForRoot(a.cfg.Storage.LibraryDir, "ps3")
+	dir, err := config.TitleDirForRoot(a.cfg.Storage.LibraryDir, "ps3")
 	if err != nil {
 		return err
 	}
@@ -481,7 +493,7 @@ func (a *App) ClearTitleCache(tid string) error {
 	return nil
 }
 
-// OpenFolder reveals the given path in the system's file manager.
+// OpenFolder opens the given directory in the system's file manager.
 // Cross-platform: Explorer on Windows, `open` on macOS, `xdg-open` on Linux.
 // `path` may start with ~ (expanded against the user home dir). If the path
 // does not exist the OS file manager will surface its own error.
@@ -507,9 +519,7 @@ func (a *App) OpenFolder(path string) error {
 	var cmd *exec.Cmd
 	switch runtime.GOOS {
 	case "windows":
-		// /select, opens the parent and selects the item. We're given a folder,
-		// so this reveals it inside its parent — what the user expects.
-		cmd = exec.Command("explorer", "/select,", absPath)
+		cmd = exec.Command("explorer", absPath)
 	case "darwin":
 		cmd = exec.Command("open", absPath)
 	default: // linux, *bsd, etc.

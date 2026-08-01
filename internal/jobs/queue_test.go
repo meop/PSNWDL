@@ -115,7 +115,7 @@ func TestEnqueue_HappyPath(t *testing.T) {
 		t.Fatalf("final state = %s, want done; events: %v", state, emitter.names())
 	}
 
-	expectedDest := filepath.Join(home, ".psnwdl", "download", "ps3", "updates", "BCUS98114", "BCUS98114_01.05.pkg")
+	expectedDest := filepath.Join(home, ".psnwdl", "library", "ps3", "title", "BCUS98114", "BCUS98114_01.05.pkg")
 	got, err := os.ReadFile(expectedDest)
 	if err != nil {
 		t.Fatalf("read dest: %v", err)
@@ -323,7 +323,7 @@ func TestDestinationPath(t *testing.T) {
 	if err != nil {
 		t.Fatalf("destinationPath: %v", err)
 	}
-	want := filepath.Join(home, ".psnwdl", "download", "ps3", "updates", "BCUS98114", "BCUS98114_01.05.pkg")
+	want := filepath.Join(home, ".psnwdl", "library", "ps3", "title", "BCUS98114", "BCUS98114_01.05.pkg")
 	if got != want {
 		t.Errorf("got %q, want %q", got, want)
 	}
@@ -343,7 +343,27 @@ func TestDestinationPath_DRMFree(t *testing.T) {
 	if err != nil {
 		t.Fatalf("destinationPath: %v", err)
 	}
-	want := filepath.Join(home, ".psnwdl", "download", "ps3", "updates", "NPEA00001", "NPEA00001_01.00_drm_free.pkg")
+	want := filepath.Join(home, ".psnwdl", "library", "ps3", "title", "NPEA00001", "NPEA00001_01.00_drm_free.pkg")
+	if got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+func TestDestinationPath_Firmware(t *testing.T) {
+	home := t.TempDir()
+	setHomeDir(t, home)
+
+	q := NewQueue(config.Network{}, "", NoopEmitter{}, activity.NewSink(NoopEmitter{}))
+	got, err := q.destinationPath(Request{
+		TitleID: "firmware",
+		Mode:    "ps3",
+		Kind:    KindFirmware,
+		Update:  psn.Update{Version: "4.93", URL: "https://example.com/PS3UPDAT.PUP"},
+	})
+	if err != nil {
+		t.Fatalf("destinationPath: %v", err)
+	}
+	want := filepath.Join(home, ".psnwdl", "library", "ps3", "firmware", "firmware_4.93.pup")
 	if got != want {
 		t.Errorf("got %q, want %q", got, want)
 	}

@@ -22,7 +22,7 @@ func DefaultLibraryDir() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(home, "download"), nil
+	return filepath.Join(home, "library"), nil
 }
 
 // ConfigPath returns the config file path, honoring $PSNETDL_CONFIG if set.
@@ -37,16 +37,15 @@ func ConfigPath() (string, error) {
 	return filepath.Join(home, "config.toml"), nil
 }
 
-// UpdatesDir returns the per-mode update cache directory.
-func UpdatesDir(mode string) (string, error) {
-	root, err := DefaultLibraryDir()
+func legacyDefaultLibraryDir() (string, error) {
+	home, err := Home()
 	if err != nil {
 		return "", err
 	}
-	return UpdatesDirForRoot(root, mode)
+	return filepath.Join(home, "download"), nil
 }
 
-func UpdatesDirForRoot(root, mode string) (string, error) {
+func TitleDirForRoot(root, mode string) (string, error) {
 	if root == "" {
 		var err error
 		root, err = DefaultLibraryDir()
@@ -54,5 +53,16 @@ func UpdatesDirForRoot(root, mode string) (string, error) {
 			return "", err
 		}
 	}
-	return filepath.Join(root, mode, "updates"), nil
+	return filepath.Join(root, mode, "title"), nil
+}
+
+func FirmwareDirForRoot(root, mode string) (string, error) {
+	if root == "" {
+		var err error
+		root, err = DefaultLibraryDir()
+		if err != nil {
+			return "", err
+		}
+	}
+	return filepath.Join(root, mode, "firmware"), nil
 }

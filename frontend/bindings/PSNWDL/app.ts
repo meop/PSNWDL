@@ -126,7 +126,7 @@ export function ListRPCS3Library(): $CancellablePromise<rpcs3$0.Entry[]> {
 }
 
 /**
- * OpenFolder reveals the given path in the system's file manager.
+ * OpenFolder opens the given directory in the system's file manager.
  * Cross-platform: Explorer on Windows, `open` on macOS, `xdg-open` on Linux.
  * `path` may start with ~ (expanded against the user home dir). If the path
  * does not exist the OS file manager will surface its own error.
@@ -193,8 +193,10 @@ export function SearchVita(tid: string): $CancellablePromise<psn$0.Title | null>
 /**
  * SyncTitlePS3 enqueues only the missing updates for a single title.
  */
-export function SyncTitlePS3(tid: string): $CancellablePromise<void> {
-    return $Call.ByID(2047523786, tid);
+export function SyncTitlePS3(tid: string): $CancellablePromise<string[]> {
+    return $Call.ByID(2047523786, tid).then(($result: any) => {
+        return $$createType15($result);
+    });
 }
 
 export function UpdateDownloadLibrary(): $CancellablePromise<downloads$0.Title[]> {
@@ -223,3 +225,4 @@ const $$createType11 = library$0.Row.createFrom;
 const $$createType12 = $Create.Array($$createType11);
 const $$createType13 = psn$0.Title.createFrom;
 const $$createType14 = $Create.Nullable($$createType13);
+const $$createType15 = $Create.Array($Create.Any);

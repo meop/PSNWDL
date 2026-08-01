@@ -34,7 +34,7 @@ func setHomeDir(t *testing.T, tmpDir string) {
 
 func writeCachedPKG(t *testing.T, home, tid, version string) {
 	t.Helper()
-	dir := filepath.Join(home, ".psnwdl", "download", "ps3", "updates", tid)
+	dir := filepath.Join(home, ".psnwdl", "library", "ps3", "title", tid)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -98,6 +98,31 @@ func TestReconcilePS3(t *testing.T) {
 		if r.Status != want[r.TitleID] {
 			t.Errorf("%s status = %s, want %s", r.TitleID, r.Status, want[r.TitleID])
 		}
+	}
+}
+
+func TestStatusForVersions(t *testing.T) {
+	tests := []struct {
+		name      string
+		installed string
+		cached    string
+		server    string
+		hasPath   bool
+		want      Status
+	}{
+		{name: "installed current", installed: "01.05", cached: "", server: "01.05", hasPath: true, want: StatusUpToDate},
+		{name: "downloaded but not installed", installed: "01.00", cached: "01.05", server: "01.05", hasPath: true, want: StatusCachedNotInstalled},
+		{name: "cache incomplete", installed: "01.00", cached: "01.03", server: "01.05", hasPath: true, want: StatusUpdateAvailable},
+		{name: "nothing installed or cached", server: "01.05", hasPath: true, want: StatusMissingAll},
+		{name: "cache-only current", cached: "01.05", server: "01.05", want: StatusUpToDate},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := statusForVersions(tt.installed, tt.cached, tt.server, tt.hasPath); got != tt.want {
+				t.Fatalf("statusForVersions() = %s, want %s", got, tt.want)
+			}
+		})
 	}
 }
 

@@ -33,7 +33,7 @@ RPCS3 `dev_hdd0/game` tree — but the PKGs themselves are unmodified.
 - **RPCS3 library reconciliation (PS3 only)** — reads your RPCS3 `games.yml` +
   `dev_hdd0/game` to show, per installed title: installed version → latest
   server version, with status badges (up to date / update available / missing /
-  unreachable). One-click per-title sync.
+  unreachable). One-click per-title update downloads.
 - **PyKG-style batch install (PS3)** — point the app at a folder of local PS3
   `.pkg` files you are entitled to use; it discovers them recursively, groups
   by title, orders by version, and streams the extracts into `dev_hdd0/game`,
@@ -160,14 +160,14 @@ PSNWDL/
 Config lives at `~/.psnwdl/config.toml` (created with defaults on first run):
 
 ```toml
-schema_version = 1
+schema_version = 2
 
 [rpcs3]
 games_yml = ""     # absolute path to RPCS3/games.yml (auto-detectable)
 hdd0_game = ""     # absolute path to RPCS3/dev_hdd0/game (for PS3 install)
 
 [storage]
-library_dir = "/home/you/.psnwdl/download"  # base folder for downloaded files
+library_dir = "/home/you/.psnwdl/library"  # base folder for downloaded files
 
 [network]
 max_concurrent_downloads = 5
@@ -188,15 +188,24 @@ normal desktop validation.
 
 ### Cache layout
 
-Downloaded packages are cached under `<library_dir>/<mode>/updates/<TitleID>/`:
+Downloaded files are separated by platform and content type. Firmware is kept
+directly under `firmware`; title updates are grouped by title ID under `title`:
 
 ```
-~/.psnwdl/download/
-├── ps3/updates/BCUS98114/BCUS98114_01.05.pkg
-├── ps4/updates/CUSA00000/<file>.pkg
-├── ps5/updates/firmware/firmware_26.04-13.40.00.pup
+~/.psnwdl/library/
+├── ps3/
+│   ├── firmware/firmware_4.93.pup
+│   └── title/BCUS98114/BCUS98114_01.05.pkg
+├── ps4/
+│   ├── firmware/<firmware>.pup
+│   └── title/CUSA00000/<update>.pkg
+├── ps5/firmware/firmware_26.04-13.40.00.pup
 └── …
 ```
+
+On the first schema-v2 launch, the former `<mode>/updates/<TitleID>` layout is
+migrated in place. The former default root `~/.psnwdl/download` is moved to the
+new `~/.psnwdl/library` root; configured custom roots remain custom.
 
 Downloads are stored as the raw signed packages Sony ships. PS3 extraction into
 RPCS3 is an explicit Emulator action.

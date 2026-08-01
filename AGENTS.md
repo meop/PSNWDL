@@ -85,16 +85,23 @@ module root to regenerate the TS models/bindings, then rebuild.
 
 9. **The four workbench panes refresh independently.** Download search refreshes
    only its results; Emulator reconciliation runs only on initial load, explicit
-   refresh, relevant settings changes, or an Emulator action that changes the
-   installation. Completed jobs refresh the downloaded Library pane only. Do
-   not reintroduce periodic reconciliation or make cache changes fan out into
-   RPCS3 parsing and PSN requests.
+   refresh, relevant settings changes, installation changes, or after the jobs
+   started by an Emulator download action reach terminal state. Every completed
+   job refreshes Library, but Download-pane jobs must not otherwise refresh
+   Emulator. Do not reintroduce periodic reconciliation or make unrelated cache
+   changes fan out into RPCS3 parsing and PSN requests.
 
 10. **The queue is application-wide and belongs to Activity.** Download and
     Emulator actions share one backend queue and one concurrency limit. Show
     only active jobs in Activity, remove them from that view at terminal state,
     and keep history in the Activity log. Do not embed a queue table in either
     top pane.
+
+11. **Library storage has explicit content branches.** The default root is
+    `~/.psnwdl/library`; files live under `<mode>/firmware/` or
+    `<mode>/title/<TitleID>/`. Schema-v1 libraries are migrated by
+    `config.MigrateLibraryLayout`. Keep download destinations, scanning,
+    reconciliation, Emulator cache actions, and documentation on this layout.
 
 ---
 

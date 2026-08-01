@@ -11,7 +11,7 @@ import (
 	"github.com/pelletier/go-toml/v2"
 )
 
-const SchemaVersion = 1
+const SchemaVersion = 2
 
 type Config struct {
 	SchemaVersion int     `toml:"schema_version" json:"schema_version"`
@@ -51,8 +51,8 @@ type UI struct {
 func Default() *Config {
 	home, _ := os.UserHomeDir()
 	libraryDir := ""
-	if homeDir, err := Home(); err == nil {
-		libraryDir = filepath.Join(homeDir, "download")
+	if defaultLibraryDir, err := DefaultLibraryDir(); err == nil {
+		libraryDir = defaultLibraryDir
 	}
 	return &Config{
 		SchemaVersion: SchemaVersion,

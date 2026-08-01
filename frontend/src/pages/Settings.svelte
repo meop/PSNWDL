@@ -384,7 +384,7 @@
                 </div>
                 <span></span>
                 <span class="col-span-2 pt-1 text-xs {hdd0Error ? 'text-error-fg' : 'text-muted-soft'}">
-                  {hdd0Error || 'Game install folder for synced updates'}
+                  {hdd0Error || 'Game install folder for downloaded updates'}
                 </span>
               </div>
             </div>

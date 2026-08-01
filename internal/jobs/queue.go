@@ -723,20 +723,27 @@ func (q *Queue) destinationPath(req Request) (string, error) {
 	libraryDir := q.libraryDir
 	q.mu.Unlock()
 
-	dir, err := config.UpdatesDirForRoot(libraryDir, req.Mode)
-	if err != nil {
-		return "", err
-	}
 	ext := ".pkg"
+	var dir string
 	if kind == KindFirmware {
 		ext = ".pup"
+		dir, err = config.FirmwareDirForRoot(libraryDir, req.Mode)
+	} else {
+		titleRoot, titleErr := config.TitleDirForRoot(libraryDir, req.Mode)
+		if titleErr != nil {
+			return "", titleErr
+		}
+		dir = filepath.Join(titleRoot, req.TitleID)
+	}
+	if err != nil {
+		return "", err
 	}
 	version := sanitizeVersion(req.Update.Version)
 	if kind == KindTitleUpdateDRMFree {
 		version += "_drm_free"
 	}
 	filename := fmt.Sprintf("%s_%s%s", req.TitleID, version, ext)
-	return filepath.Join(dir, req.TitleID, filename), nil
+	return filepath.Join(dir, filename), nil
 }
 
 func sanitizeVersion(v string) string {

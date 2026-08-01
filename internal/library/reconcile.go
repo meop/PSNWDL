@@ -193,47 +193,42 @@ func reconcileOne(ctx context.Context, e rpcs3.Entry, client PSNLookup, hdd0Game
 	serverVer := highestServerVersion(title.Updates)
 	row.LatestServer = serverVer
 
-	if hdd0Game == "" {
-		switch {
-		case localVer == "":
-			row.Status = StatusMissingAll
-		case compareVersion(localVer, serverVer) >= 0:
-			row.Status = StatusUpToDate
-		default:
-			row.Status = StatusUpdateAvailable
-		}
-		return row
-	}
-
-	switch {
-	case installedVersion != "" && compareVersion(installedVersion, serverVer) >= 0:
-		row.Status = StatusUpToDate
-	case installedVersion != "" && compareVersion(installedVersion, serverVer) < 0:
-		row.Status = StatusUpdateAvailable
-	case installedVersion == "" && localVer != "":
-		row.Status = StatusCachedNotInstalled
-	case installedVersion == "" && localVer == "":
-		row.Status = StatusMissingAll
-	default:
-		if localVer == "" {
-			row.Status = StatusMissingAll
-		} else if compareVersion(localVer, serverVer) >= 0 {
-			row.Status = StatusUpToDate
-		} else {
-			row.Status = StatusUpdateAvailable
-		}
-	}
+	row.Status = statusForVersions(installedVersion, localVer, serverVer, hdd0Game != "")
 	return row
 }
 
-// HighestCachedVersion scans ~/.psnwdl/download/<mode>/updates/<TID>/ for files named
+func statusForVersions(installedVersion, localVersion, serverVersion string, hasInstallPath bool) Status {
+	if !hasInstallPath {
+		switch {
+		case localVersion == "":
+			return StatusMissingAll
+		case compareVersion(localVersion, serverVersion) >= 0:
+			return StatusUpToDate
+		default:
+			return StatusUpdateAvailable
+		}
+	}
+
+	switch {
+	case installedVersion != "" && compareVersion(installedVersion, serverVersion) >= 0:
+		return StatusUpToDate
+	case localVersion != "" && compareVersion(localVersion, serverVersion) >= 0:
+		return StatusCachedNotInstalled
+	case installedVersion == "" && localVersion == "":
+		return StatusMissingAll
+	default:
+		return StatusUpdateAvailable
+	}
+}
+
+// HighestCachedVersion scans ~/.psnwdl/library/<mode>/title/<TID>/ for files named
 // <TID>_<version>.pkg and returns the lexically-highest version, or "".
 func HighestCachedVersion(mode, tid string) (string, error) {
 	return HighestCachedVersionIn("", mode, tid)
 }
 
 func HighestCachedVersionIn(libraryRoot, mode, tid string) (string, error) {
-	dir, err := config.UpdatesDirForRoot(libraryRoot, mode)
+	dir, err := config.TitleDirForRoot(libraryRoot, mode)
 	if err != nil {
 		return "", err
 	}

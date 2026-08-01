@@ -49,11 +49,13 @@
   let downloadError = $state<string | null>(null)
   let emulatorError = $state<string | null>(null)
   let syncingAll = $state(false)
+  let emulatorSyncJobIDs = $state<string[]>([])
   let installingDone = $state(false)
   let installingFolder = $state(false)
   let includeDRMFree = $state(false)
   let lastMode = $state<Mode>('ps3')
   let emulatorConfigKey = $state('')
+  let expandedLibraryTitles = $state<Record<string, boolean>>({})
   let titleState = $derived(searchState[mode])
   let normalizedID = $derived(titleState.titleID.trim().toUpperCase())
   let canSearch = $derived(/^[A-Z]{4}\d{5}$/.test(normalizedID) && !titleState.loading && mode !== 'ps5')
@@ -115,6 +117,19 @@
       }),
     ]
     return () => offs.forEach((off) => off())
+  })
+
+  $effect(() => {
+    const trackedIDs = emulatorSyncJobIDs
+    if (trackedIDs.length === 0) return
+
+    const trackedJobs = trackedIDs.map((id) => $jobsList.find((job) => job.id === id)).filter(Boolean)
+    if (trackedJobs.length !== trackedIDs.length || trackedJobs.some((job) => ACTIVE_JOB_STATES.has(String(job?.state)))) {
+      return
+    }
+
+    emulatorSyncJobIDs = []
+    if (mode === 'ps3') void refreshEmulator()
   })
 
   let downloadRows = $derived.by(() => {
@@ -349,7 +364,9 @@
   async function syncTitle(titleID: string) {
     emulatorError = null
     try {
-      await SyncTitlePS3(titleID)
+      const jobIDs = (await SyncTitlePS3(titleID)) ?? []
+      trackEmulatorJobs(jobIDs)
+      if (jobIDs.length === 0) await refreshEmulator()
     } catch (e) {
       emulatorError = e instanceof Error ? e.message : String(e)
     }
@@ -361,9 +378,12 @@
     syncingAll = true
     emulatorError = null
     try {
+      const jobIDs: string[] = []
       for (const row of needed) {
-        await SyncTitlePS3(row.title_id)
+        jobIDs.push(...((await SyncTitlePS3(row.title_id)) ?? []))
       }
+      trackEmulatorJobs(jobIDs)
+      if (jobIDs.length === 0) await refreshEmulator()
     } catch (e) {
       emulatorError = e instanceof Error ? e.message : String(e)
     } finally {
@@ -415,13 +435,12 @@
 
   async function openCacheFolder(titleID: string) {
     const root = emulatorState.cfg?.storage.library_dir || ''
-    await OpenFolder(`${root}/ps3/updates/${titleID}`)
+    await OpenFolder(`${root}/ps3/title/${titleID}`)
   }
 
   function pruneLibrarySelection() {
     const valid = new Set<string>()
     for (const title of libraryState.titles ?? []) {
-      valid.add(title.path)
       for (const file of title.files ?? []) valid.add(file.path)
     }
     libraryState.selected = libraryState.selected.filter((path) => valid.has(path))
@@ -470,12 +489,39 @@
   }
 
   function toggleTitle(title: Title, checked: boolean) {
-    if (checked) {
-      const childPaths = new Set((title.files ?? []).map((f) => f.path))
-      libraryState.selected = [...libraryState.selected.filter((p) => !childPaths.has(p)), title.path]
-      return
+    const childPaths = new Set((title.files ?? []).map((file) => file.path))
+    const next = new Set(libraryState.selected)
+    for (const path of childPaths) {
+      if (checked) next.add(path)
+      else next.delete(path)
     }
-    libraryState.selected = libraryState.selected.filter((p) => p !== title.path)
+    libraryState.selected = [...next]
+  }
+
+  function titleSelectionState(title: Title): 'none' | 'some' | 'all' {
+    const files = title.files ?? []
+    if (files.length === 0) return 'none'
+    const count = files.filter((file) => selected(file.path)).length
+    if (count === 0) return 'none'
+    return count === files.length ? 'all' : 'some'
+  }
+
+  function titleExpanded(path: string): boolean {
+    return expandedLibraryTitles[path] ?? true
+  }
+
+  function toggleTitleExpanded(path: string) {
+    expandedLibraryTitles[path] = !titleExpanded(path)
+  }
+
+  function trackEmulatorJobs(jobIDs: string[]) {
+    emulatorSyncJobIDs = [...new Set([...emulatorSyncJobIDs, ...jobIDs])]
+  }
+
+  function titleDownloadInProgress(titleID: string): boolean {
+    return $jobsList.some(
+      (job) => emulatorSyncJobIDs.includes(job.id) && job.title_id === titleID && ACTIVE_JOB_STATES.has(String(job.state))
+    )
   }
 
   function formatSize(bytes: number | undefined): string {
@@ -611,7 +657,7 @@
               <th class="w-24">Version</th>
               <th>Scope</th>
               <th class="w-24">Size</th>
-              <th class="w-28">Action</th>
+              <th class="w-32 text-right">Action</th>
             </tr>
           </thead>
           <tbody>
@@ -635,8 +681,8 @@
                   {/if}
                 </td>
                 <td class="text-muted">{formatSize(row.size)}</td>
-                <td>
-                  <button onclick={() => enqueueSingle(row)} disabled={isQueued(row)} class="btn btn-secondary w-24 justify-center">
+                <td class="text-right">
+                  <button onclick={() => enqueueSingle(row)} disabled={isQueued(row)} class="btn btn-primary w-24 justify-center">
                     {isQueued(row) ? 'In progress' : 'Download'}
                   </button>
                 </td>
@@ -675,7 +721,7 @@
         {/if}
         <div class="flex flex-wrap justify-end gap-2">
           <button onclick={syncAllNeeded} disabled={syncingAll || emulatorState.rows.length === 0} class="btn btn-primary">
-            Queue missing updates
+            Download updates
           </button>
           <button onclick={installFinishedPS3Jobs} disabled={installingDone || finishedPS3Jobs.length === 0} class="btn btn-secondary">
             Install completed
@@ -697,13 +743,13 @@
         {:else if emulatorState.rows.length === 0}
           <div class="empty">Emulator titles</div>
         {:else}
-          <table class="w-full text-sm">
+          <table class="w-full table-fixed text-sm">
             <thead>
               <tr>
                 <th>Title</th>
                 <th>Installed -> Server</th>
                 <th>Status</th>
-                <th class="text-right">Actions</th>
+                <th class="w-52 text-right">Action</th>
               </tr>
             </thead>
             <tbody>
@@ -724,7 +770,9 @@
                   <td class="text-right">
                     <div class="flex justify-end gap-1">
                       {#if row.status === 'update_available' || row.status === 'missing_all'}
-                        <button onclick={() => syncTitle(row.title_id)} class="btn btn-primary">Sync</button>
+                        <button onclick={() => syncTitle(row.title_id)} disabled={titleDownloadInProgress(row.title_id)} class="btn btn-primary">
+                          {titleDownloadInProgress(row.title_id) ? 'In progress' : 'Download'}
+                        </button>
                       {/if}
                       {#if row.latest_local}
                         <button onclick={() => openCacheFolder(row.title_id)} class="btn btn-secondary">Open</button>
@@ -769,13 +817,25 @@
         {:else if libraryState.titles.length === 0}
           <div class="empty">Downloaded firmware and title updates</div>
         {:else}
-          <div class="divide-y divide-border">
+          <div class="divide-y divide-border" role="tree" aria-label="Downloaded library">
             {#each libraryState.titles as title (`${title.mode}-${title.title_id}`)}
-              <section>
-                <div class="grid grid-cols-[auto_1fr_auto_auto] items-center gap-3 bg-surface px-3 py-2">
+              <section
+                role="treeitem"
+                aria-expanded={titleExpanded(title.path)}
+                aria-selected={titleSelectionState(title) !== 'none'}
+              >
+                <div class="grid grid-cols-[1.5rem_auto_1fr_auto_auto] items-center gap-2 bg-surface px-3 py-2">
+                  <button
+                    onclick={() => toggleTitleExpanded(title.path)}
+                    class="btn btn-quiet h-6 min-h-6 w-6 p-0"
+                    aria-label={`${titleExpanded(title.path) ? 'Collapse' : 'Expand'} ${title.title_id}`}
+                  >
+                    <span aria-hidden="true">{titleExpanded(title.path) ? '▾' : '▸'}</span>
+                  </button>
                   <input
                     type="checkbox"
-                    checked={selected(title.path)}
+                    checked={titleSelectionState(title) === 'all'}
+                    indeterminate={titleSelectionState(title) === 'some'}
                     aria-label={`Select ${title.title_id}`}
                     onchange={(e) => toggleTitle(title, e.currentTarget.checked)}
                   />
@@ -794,27 +854,33 @@
                   <button onclick={() => OpenFolder(title.path)} class="btn btn-secondary">Open</button>
                 </div>
 
-                <div class="divide-y divide-border bg-inset">
-                  {#each title.files ?? [] as file (file.path)}
-                    <div class="grid grid-cols-[auto_1fr_auto] items-center gap-3 px-3 py-2 text-sm">
-                      <input
-                        type="checkbox"
-                        checked={selected(title.path) || selected(file.path)}
-                        disabled={selected(title.path)}
-                        aria-label={`Select ${file.name}`}
-                        onchange={(e) => setSelected(file.path, e.currentTarget.checked)}
-                      />
-                      <div class="min-w-0">
-                        <div class="truncate text-fg" title={file.name}>{file.name}</div>
-                        <div class="truncate font-mono text-xs text-muted-soft" title={file.path}>{file.path}</div>
+                {#if titleExpanded(title.path)}
+                  <div class="divide-y divide-border bg-inset" role="group">
+                    {#each title.files ?? [] as file (file.path)}
+                      <div
+                        class="grid grid-cols-[1.5rem_auto_1fr_auto] items-center gap-2 px-3 py-2 text-sm"
+                        role="treeitem"
+                        aria-selected={selected(file.path)}
+                      >
+                        <span class="text-center text-muted-faint" aria-hidden="true">└</span>
+                        <input
+                          type="checkbox"
+                          checked={selected(file.path)}
+                          aria-label={`Select ${file.name}`}
+                          onchange={(e) => setSelected(file.path, e.currentTarget.checked)}
+                        />
+                        <div class="min-w-0">
+                          <div class="truncate text-fg" title={file.name}>{file.name}</div>
+                          <div class="truncate font-mono text-xs text-muted-soft" title={file.path}>{file.path}</div>
+                        </div>
+                        <div class="text-right text-xs text-muted">
+                          <div>{file.kind || 'File'}</div>
+                          <div>{labelForFile(file)}</div>
+                        </div>
                       </div>
-                      <div class="text-right text-xs text-muted">
-                        <div>{file.kind || 'File'}</div>
-                        <div>{labelForFile(file)}</div>
-                      </div>
-                    </div>
-                  {/each}
-                </div>
+                    {/each}
+                  </div>
+                {/if}
               </section>
             {/each}
           </div>
