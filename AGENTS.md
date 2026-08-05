@@ -205,7 +205,10 @@ These all happened in a prior pass and were fixed — they tend to recur:
 
 ---
 
-## Current TODO State
+## Upstream tracking
 
-There are no tracked TODO/plan files. If a new TODO appears, keep README and
-AGENTS aligned with product decisions when implementing it.
+Potential upstream gaps and their downstream workarounds are indexed in
+`docs/upstream.md`, with self-contained records in `docs/upstream/`. A draft is
+not a commitment to file an issue: search the current upstream project first,
+because the gap may already be reported or fixed. Keep resolved and never-filed
+records so later agents know when a workaround can be removed.

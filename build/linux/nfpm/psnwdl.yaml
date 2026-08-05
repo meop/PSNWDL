@@ -1,0 +1,50 @@
+name: "psnwdl"
+arch: ${GOARCH}
+platform: "linux"
+version: "0.1.0"
+section: "utils"
+priority: "optional"
+maintainer: "Marshall Porter <meoporter@gmail.com>"
+description: "Download and manage PlayStation content for RPCS3"
+vendor: "Marshall Porter"
+homepage: "https://github.com/meop/PSNWDL"
+license: "MIT"
+release: "1"
+
+contents:
+  - src: "./bin/PSNWDL"
+    dst: "/usr/bin/PSNWDL"
+  - src: "./build/appicon.png"
+    dst: "/usr/share/pixmaps/PSNWDL.png"
+  - src: "./build/linux/PSNWDL.desktop"
+    dst: "/usr/share/applications/PSNWDL.desktop"
+  - src: "./LICENSE"
+    dst: "/usr/share/licenses/psnwdl/LICENSE"
+  - src: "./LICENSE"
+    dst: "/usr/share/doc/psnwdl/copyright"
+    packager: deb
+
+# Debian 13 / Ubuntu 24.04 and newer.
+depends:
+  - libgtk-4-1
+  - libwebkitgtk-6.0-4
+
+overrides:
+  # Fedora and distributions that provide WebKitGTK 6.0.
+  rpm:
+    depends:
+      - gtk4
+      - webkitgtk6.0
+  # Arch Linux package names used by pacman.
+  archlinux:
+    depends:
+      - gtk4
+      - webkitgtk-6.0
+  # Alpine Linux 3.22 and newer. The APK is built natively against musl.
+  apk:
+    depends:
+      - gtk4.0
+      - webkit2gtk-6.0
+
+scripts:
+  postinstall: "./build/linux/nfpm/scripts/postinstall.sh"
