@@ -178,8 +178,8 @@ The GitHub Actions pipeline validates every branch and pull request. A push to
 - Linux x64 and ARM64: DEB, RPM, Arch package, Alpine APK, and portable tarball
 - macOS Intel and Apple Silicon: DMG and portable `.app` ZIP
 - AUR-ready `psnwdl-bin` source package (`PKGBUILD` + `.SRCINFO`)
-- `sha256sums.txt` covering every release artifact
-- `sha256sums.txt.sig`, a detached GPG signature made by the release key
+- `SHA256SUMS` covering every release artifact
+- `SHA256SUMS.sig`, a detached GPG signature made by the release key
 
 Binary artifact names follow
 `PSNWDL-<version>-<platform>-<arch>[-<variant>].<extension>`. Platform names are
@@ -197,8 +197,8 @@ Verify the checksum manifest with the public release key, then verify the
 downloaded artifacts:
 
 ```sh
-gpg --verify sha256sums.txt.sig sha256sums.txt
-sha256sum --check sha256sums.txt
+gpg --verify SHA256SUMS.sig SHA256SUMS
+sha256sum --check SHA256SUMS
 ```
 
 It then creates a signed tag, generates the changelog, and publishes the
