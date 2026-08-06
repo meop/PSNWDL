@@ -128,6 +128,34 @@ their development packages before building:
 sudo apt install build-essential pkg-config libgtk-4-dev libwebkitgtk-6.0-dev
 ```
 
+Release packages declare the corresponding runtime dependencies, so the
+system package manager installs them automatically:
+
+```sh
+# Debian 13 / Ubuntu 24.04+
+sudo apt install ./PSNWDL-<version>-linux-<arch>.deb
+
+# Fedora
+sudo dnf install ./PSNWDL-<version>-linux-<arch>.rpm
+
+# Arch Linux (direct prebuilt package)
+sudo pacman -U ./PSNWDL-<version>-linux-<arch>.pkg.tar.zst
+
+# Alpine Linux 3.22+
+sudo apk add --allow-untrusted ./PSNWDL-<version>-linux-<arch>.apk
+```
+
+The Alpine APK contains a separate musl-native build; it is not the Ubuntu
+binary repackaged under a different extension. Release APKs are currently
+unsigned, hence Alpine's `--allow-untrusted` flag for a downloaded local file.
+
+The direct Arch package can be downloaded and installed with `pacman -U`. The
+separate AUR-ready release tarball contains `PKGBUILD` and `.SRCINFO` for the
+prebuilt `psnwdl-bin` package. Once that recipe is published to the AUR, `yay`
+or another AUR helper fetches the matching GitHub release binary and builds the
+Pacman package locally. Both approaches depend on Arch's `gtk4` and
+`webkitgtk-6.0` packages.
+
 ### Versioning and release builds
 
 `VERSION` is the only file edited to change the application version. The
@@ -147,9 +175,31 @@ The GitHub Actions pipeline validates every branch and pull request. A push to
 `master` whose `VERSION` has no existing `v<VERSION>` tag builds these artifacts:
 
 - Windows x64 and ARM64: per-user NSIS installer and portable ZIP
-- Linux x64 and ARM64: AppImage
-- macOS Intel and Apple Silicon: DMG
-- `SHA256SUMS.txt` covering every release artifact
+- Linux x64 and ARM64: DEB, RPM, Arch package, Alpine APK, and portable tarball
+- macOS Intel and Apple Silicon: DMG and portable `.app` ZIP
+- AUR-ready `psnwdl-bin` source package (`PKGBUILD` + `.SRCINFO`)
+- `SHA256SUMS` covering every release artifact
+- `SHA256SUMS.sig`, a detached GPG signature made by the release key
+
+Binary artifact names follow
+`PSNWDL-<version>-<platform>-<arch>[-<variant>].<extension>`. Platform names are
+`windows`, `linux`, and `macos`; architectures are `amd64` and `arm64`; and the
+optional variant identifies forms such as `installer` or `portable`. Native
+Linux package formats are already unambiguous from their extensions. The AUR
+recipe is named `PSNWDL-<version>-aur-source.tar.gz` because one source recipe
+covers both supported architectures.
+
+Every distributed binary package contains `LICENSE`; GitHub's generated
+source archives contain the tracked root copy as well. The release does not
+attach a redundant standalone `LICENSE` asset.
+
+Verify the checksum manifest with the public release key, then verify the
+downloaded artifacts:
+
+```sh
+gpg --verify SHA256SUMS.sig SHA256SUMS
+sha256sum --check SHA256SUMS
+```
 
 It then creates a signed tag, generates the changelog, and publishes the
 release. A hyphenated version such as `1.2.3-rc1` becomes a GitHub prerelease.
@@ -178,8 +228,10 @@ definition.
 
 ```
 PSNWDL/
+├── LICENSE                # MIT license included with source and binary packages
 ├── VERSION                # single source of application/release version
 ├── .github/workflows/     # validation, six-platform build matrix, release
+├── docs/upstream.md       # potential and resolved upstream reports
 ├── app.go                 # Wails-bound methods (the app's public API surface)
 ├── main.go                # Wails app bootstrap
 ├── Taskfile.yaml          # Wails 3 build/dev/package entry points
@@ -303,5 +355,6 @@ before considering the work done.
 
 ## License
 
-Personal-use archival tool. No warranty. Do not redistribute downloaded
-packages — they are Sony's signed content.
+PSNWDL is released under the [MIT License](LICENSE). Downloaded PlayStation
+packages are not covered by that license: they remain Sony's signed content and
+must not be redistributed.

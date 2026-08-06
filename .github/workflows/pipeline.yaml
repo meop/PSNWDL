@@ -18,6 +18,7 @@ permissions:
 
 env:
   GO_VERSION: '1.25.x'
+  NFPM_VERSION: 'v2.47.0'
   NODE_VERSION: '26.3.1'
   PNPM_VERSION: '11.18.0'
   WAILS_VERSION: 'v3.0.0-alpha2.121'
@@ -202,22 +203,49 @@ jobs:
           $version = (Get-Content VERSION -Raw).Trim()
           $installer = Get-Item "bin/PSNWDL-${{ matrix.arch }}-installer.exe"
           Copy-Item $installer.FullName "staging/PSNWDL-$version-windows-${{ matrix.arch }}-installer.exe"
-          Compress-Archive -Path bin/PSNWDL.exe -DestinationPath "staging/PSNWDL-$version-windows-${{ matrix.arch }}-portable.zip"
-      - name: Build Linux AppImage
+          Compress-Archive -Path bin/PSNWDL.exe, LICENSE -DestinationPath "staging/PSNWDL-$version-windows-${{ matrix.arch }}-portable.zip"
+      - name: Build Linux packages
         if: matrix.os == 'linux'
         shell: bash
         run: |
-          wails3 task linux:create:appimage ARCH=${{ matrix.arch }}
+          wails3 task linux:package ARCH=${{ matrix.arch }}
           mkdir -p staging
           version=$(tr -d '[:space:]' < VERSION)
           shopt -s nullglob
-          appimages=(bin/*.AppImage)
-          if (( ${#appimages[@]} != 1 )); then
-            echo "Expected one AppImage, found ${#appimages[@]}" >&2
+          debs=(bin/*.deb)
+          rpms=(bin/*.rpm)
+          arch_packages=(bin/*.pkg.tar.zst)
+          if (( ${#debs[@]} != 1 || ${#rpms[@]} != 1 || ${#arch_packages[@]} != 1 )); then
+            echo "Expected one DEB, RPM, and Arch package; found ${#debs[@]} DEB, ${#rpms[@]} RPM, and ${#arch_packages[@]} Arch files" >&2
             exit 1
           fi
-          mv "${appimages[0]}" "staging/PSNWDL-$version-linux-${{ matrix.arch }}.AppImage"
-      - name: Build macOS disk image
+          mv "${debs[0]}" "staging/PSNWDL-$version-linux-${{ matrix.arch }}.deb"
+          mv "${rpms[0]}" "staging/PSNWDL-$version-linux-${{ matrix.arch }}.rpm"
+          mv "${arch_packages[0]}" "staging/PSNWDL-$version-linux-${{ matrix.arch }}.pkg.tar.zst"
+
+          archive_root="archive/PSNWDL-$version"
+          mkdir -p "$archive_root"
+          cp bin/PSNWDL "$archive_root/PSNWDL"
+          cp build/linux/PSNWDL.desktop "$archive_root/PSNWDL.desktop"
+          cp build/appicon.png "$archive_root/PSNWDL.png"
+          cp LICENSE "$archive_root/LICENSE"
+          tar -C archive -czf "staging/PSNWDL-$version-linux-${{ matrix.arch }}-portable.tar.gz" "PSNWDL-$version"
+
+          docker build \
+            --build-arg NFPM_VERSION='${{ env.NFPM_VERSION }}' \
+            --build-arg PNPM_VERSION='${{ env.PNPM_VERSION }}' \
+            --build-arg TARGETARCH='${{ matrix.arch }}' \
+            --build-arg WAILS_VERSION='${{ env.WAILS_VERSION }}' \
+            --file build/linux/alpine/Dockerfile \
+            --output type=local,dest=alpine-package \
+            .
+          apks=(alpine-package/*.apk)
+          if (( ${#apks[@]} != 1 )); then
+            echo "Expected one Alpine APK, found ${#apks[@]}" >&2
+            exit 1
+          fi
+          mv "${apks[0]}" "staging/PSNWDL-$version-linux-${{ matrix.arch }}.apk"
+      - name: Build macOS packages
         if: matrix.os == 'darwin'
         shell: bash
         run: |
@@ -225,6 +253,9 @@ jobs:
           mkdir -p staging
           version=$(tr -d '[:space:]' < VERSION)
           mv bin/PSNWDL.dmg "staging/PSNWDL-$version-macos-${{ matrix.arch }}.dmg"
+          ditto -c -k --sequesterRsrc --keepParent \
+            bin/PSNWDL.app \
+            "staging/PSNWDL-$version-macos-${{ matrix.arch }}-portable.zip"
       - name: Upload package artifacts
         uses: actions/upload-artifact@v6
         with:
@@ -250,6 +281,7 @@ jobs:
           path: artifacts
           merge-multiple: true
       - name: Import GPG key
+        id: import_gpg
         uses: crazy-max/ghaction-import-gpg@v7
         with:
           gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
@@ -271,9 +303,21 @@ jobs:
             }
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: Generate checksums
+      - name: Generate AUR package recipe
+        shell: pwsh
+        run: |
+          ./scripts/New-AURSourcePackage.ps1 `
+            -ArtifactsDirectory artifacts `
+            -Version '${{ needs.version.outputs.new_version }}'
+      - name: Generate and sign checksums
         working-directory: artifacts
-        run: sha256sum * > SHA256SUMS.txt
+        run: |
+          LC_ALL=C sha256sum -- * > SHA256SUMS
+          gpg --batch --yes \
+            --local-user '${{ steps.import_gpg.outputs.fingerprint }}' \
+            --output SHA256SUMS.sig \
+            --detach-sign SHA256SUMS
+          gpg --batch --verify SHA256SUMS.sig SHA256SUMS
       - name: Create GitHub release
         uses: softprops/action-gh-release@v3
         with:

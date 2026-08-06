@@ -9,7 +9,7 @@ info:
   productName: "PSNWDL"
   productIdentifier: "com.meop.psnwdl"
   description: "Download and manage PlayStation content for RPCS3"
-  copyright: "Copyright 2026 Marshall Porter"
+  copyright: "Copyright 2026 meop"
   comments: "PSNWDL desktop application"
   version: "0.1.0"
   # cfBundleIconName: "appicon" # The macOS icon name in Assets.car icon bundles (optional)

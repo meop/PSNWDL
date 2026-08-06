@@ -48,15 +48,21 @@ try {
         Remove-Item -LiteralPath $unusedLinuxTemplate -Force
     }
 
-    $nfpmPath = Join-Path $repoRoot 'build/linux/nfpm/nfpm.yaml'
-    $nfpm = [System.IO.File]::ReadAllText($nfpmPath)
-    $nfpm = [regex]::Replace($nfpm, '(?m)^version: "[^"]+"(?=\r?$)', "version: `"$version`"")
-    [System.IO.File]::WriteAllText($nfpmPath, $nfpm, [System.Text.UTF8Encoding]::new($false))
+    foreach ($relativePath in @(
+        'build/linux/nfpm/nfpm.yaml',
+        'build/linux/nfpm/psnwdl.yaml'
+    )) {
+        $nfpmPath = Join-Path $repoRoot $relativePath
+        $nfpm = [System.IO.File]::ReadAllText($nfpmPath)
+        $nfpm = [regex]::Replace($nfpm, '(?m)^version: "[^"]+"(?=\r?$)', "version: `"$version`"")
+        [System.IO.File]::WriteAllText($nfpmPath, $nfpm, [System.Text.UTF8Encoding]::new($false))
+    }
 
     foreach ($relativePath in @(
         'build/darwin/Info.dev.plist',
         'build/darwin/Info.plist',
         'build/linux/nfpm/nfpm.yaml',
+        'build/linux/nfpm/psnwdl.yaml',
         'build/windows/info.json',
         'build/windows/nsis/wails_tools.nsh'
     )) {

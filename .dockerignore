@@ -1,0 +1,7 @@
+.git
+.task
+bin
+coverage.out
+frontend/dist
+frontend/node_modules
+node_modules
