@@ -316,6 +316,9 @@ jobs:
           ./scripts/New-AURSourcePackage.ps1 `
             -ArtifactsDirectory artifacts `
             -Version '${{ needs.version.outputs.new_version }}'
+      - name: Normalize GitHub release filenames
+        shell: pwsh
+        run: ./scripts/Normalize-ReleaseArtifactNames.ps1 -ArtifactsDirectory artifacts
       - name: Generate and sign checksums
         working-directory: artifacts
         run: |
