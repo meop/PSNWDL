@@ -111,7 +111,7 @@ try {
         [System.Text.UTF8Encoding]::new($false)
     )
 
-    $outputName = "PSNWDL-$Version-aur-source.tar.gz"
+    $outputName = "PSNWDL-$Version-linux-aur-source.tar.gz"
     $outputPath = Join-Path $artifactsPath $outputName
     & tar -C $temporaryDirectory -czf $outputPath PKGBUILD .SRCINFO
     if ($LASTEXITCODE -ne 0) {

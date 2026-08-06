@@ -186,7 +186,7 @@ Binary artifact names follow
 `windows`, `linux`, and `macos`; architectures are `amd64` and `arm64`; and the
 optional variant identifies forms such as `installer` or `portable`. Native
 Linux package formats are already unambiguous from their extensions. The AUR
-recipe is named `PSNWDL-<version>-aur-source.tar.gz` because one source recipe
+recipe is named `PSNWDL-<version>-linux-aur-source.tar.gz`; one source recipe
 covers both supported architectures.
 
 Every distributed binary package contains `LICENSE`; GitHub's generated
