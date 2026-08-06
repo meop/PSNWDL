@@ -211,6 +211,11 @@ jobs:
           wails3 task linux:package ARCH=${{ matrix.arch }}
           mkdir -p staging
           version=$(tr -d '[:space:]' < VERSION)
+          case '${{ matrix.arch }}' in
+            amd64) archlinux_arch=x86_64 ;;
+            arm64) archlinux_arch=aarch64 ;;
+            *) echo "Unsupported Arch Linux architecture: ${{ matrix.arch }}" >&2; exit 1 ;;
+          esac
           shopt -s nullglob
           debs=(bin/*.deb)
           rpms=(bin/*.rpm)
@@ -221,7 +226,7 @@ jobs:
           fi
           mv "${debs[0]}" "staging/PSNWDL-$version-linux-${{ matrix.arch }}.deb"
           mv "${rpms[0]}" "staging/PSNWDL-$version-linux-${{ matrix.arch }}.rpm"
-          mv "${arch_packages[0]}" "staging/PSNWDL-$version-linux-${{ matrix.arch }}.pkg.tar.zst"
+          mv "${arch_packages[0]}" "staging/PSNWDL-$version-linux-$archlinux_arch.pkg.tar.zst"
 
           archive_root="archive/PSNWDL-$version"
           mkdir -p "$archive_root"

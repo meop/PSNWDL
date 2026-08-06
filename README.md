@@ -139,7 +139,7 @@ sudo apt install ./PSNWDL-<version>-linux-<arch>.deb
 sudo dnf install ./PSNWDL-<version>-linux-<arch>.rpm
 
 # Arch Linux (direct prebuilt package)
-sudo pacman -U ./PSNWDL-<version>-linux-<arch>.pkg.tar.zst
+sudo pacman -U ./PSNWDL-<version>-linux-x86_64.pkg.tar.zst
 
 # Alpine Linux 3.22+
 sudo apk add --allow-untrusted ./PSNWDL-<version>-linux-<arch>.apk
@@ -183,11 +183,13 @@ The GitHub Actions pipeline validates every branch and pull request. A push to
 
 Binary artifact names follow
 `PSNWDL-<version>-<platform>-<arch>[-<variant>].<extension>`. Platform names are
-`windows`, `linux`, and `macos`; architectures are `amd64` and `arm64`; and the
-optional variant identifies forms such as `installer` or `portable`. Native
-Linux package formats are already unambiguous from their extensions. The AUR
-recipe is named `PSNWDL-<version>-linux-aur-source.tar.gz`; one source recipe
-covers both supported architectures.
+`windows`, `linux`, and `macos`; architectures are normally `amd64` and
+`arm64`; and the optional variant identifies forms such as `installer` or
+`portable`. Native Arch Linux `.pkg.tar.zst` files use Arch's `x86_64` and
+`aarch64` architecture names. Other native Linux package formats are already
+unambiguous from their extensions. The AUR recipe is named
+`PSNWDL-<version>-linux-aur-source.tar.gz`; one source recipe covers both
+supported architectures.
 
 Every distributed binary package contains `LICENSE`; GitHub's generated
 source archives contain the tracked root copy as well. The release does not
