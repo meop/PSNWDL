@@ -133,26 +133,32 @@ jobs:
             runner: windows-latest
             os: windows
             arch: amd64
+            release_arch: x64
           - name: Windows ARM64
             runner: windows-11-arm
             os: windows
             arch: arm64
+            release_arch: arm64
           - name: Linux x64
             runner: ubuntu-24.04
             os: linux
             arch: amd64
+            release_arch: x86_64
           - name: Linux ARM64
             runner: ubuntu-24.04-arm
             os: linux
             arch: arm64
+            release_arch: aarch64
           - name: macOS Intel
             runner: macos-15-intel
             os: darwin
             arch: amd64
+            release_arch: x86_64
           - name: macOS Apple Silicon
             runner: macos-15
             os: darwin
             arch: arm64
+            release_arch: arm64
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -188,6 +194,9 @@ jobs:
           $nsisPath | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
       - name: Install Wails CLI
         run: go install github.com/wailsapp/wails/v3/cmd/wails3@${{ env.WAILS_VERSION }}
+      - name: Install nFPM
+        if: matrix.os == 'linux'
+        run: go install github.com/goreleaser/nfpm/v2/cmd/nfpm@${{ env.NFPM_VERSION }}
       - name: Install frontend dependencies
         working-directory: frontend
         run: pnpm install --frozen-lockfile
@@ -202,8 +211,8 @@ jobs:
           New-Item -ItemType Directory -Force staging | Out-Null
           $version = (Get-Content VERSION -Raw).Trim()
           $installer = Get-Item "bin/PSNWDL-${{ matrix.arch }}-installer.exe"
-          Copy-Item $installer.FullName "staging/PSNWDL-$version-windows-${{ matrix.arch }}-installer.exe"
-          Compress-Archive -Path bin/PSNWDL.exe, LICENSE -DestinationPath "staging/PSNWDL-$version-windows-${{ matrix.arch }}-portable.zip"
+          Copy-Item $installer.FullName "staging/PSNWDL-$version-windows-${{ matrix.release_arch }}-installer.exe"
+          Compress-Archive -Path bin/PSNWDL.exe, LICENSE -DestinationPath "staging/PSNWDL-$version-windows-${{ matrix.release_arch }}-portable.zip"
       - name: Build Linux packages
         if: matrix.os == 'linux'
         shell: bash
@@ -211,11 +220,6 @@ jobs:
           wails3 task linux:package ARCH=${{ matrix.arch }}
           mkdir -p staging
           version=$(tr -d '[:space:]' < VERSION)
-          case '${{ matrix.arch }}' in
-            amd64) archlinux_arch=x86_64 ;;
-            arm64) archlinux_arch=aarch64 ;;
-            *) echo "Unsupported Arch Linux architecture: ${{ matrix.arch }}" >&2; exit 1 ;;
-          esac
           shopt -s nullglob
           debs=(bin/*.deb)
           rpms=(bin/*.rpm)
@@ -224,9 +228,7 @@ jobs:
             echo "Expected one DEB, RPM, and Arch package; found ${#debs[@]} DEB, ${#rpms[@]} RPM, and ${#arch_packages[@]} Arch files" >&2
             exit 1
           fi
-          mv "${debs[0]}" "staging/PSNWDL-$version-linux-${{ matrix.arch }}.deb"
-          mv "${rpms[0]}" "staging/PSNWDL-$version-linux-${{ matrix.arch }}.rpm"
-          mv "${arch_packages[0]}" "staging/PSNWDL-$version-linux-$archlinux_arch.pkg.tar.zst"
+          mv "${debs[0]}" "${rpms[0]}" "${arch_packages[0]}" staging/
 
           archive_root="archive/PSNWDL-$version"
           mkdir -p "$archive_root"
@@ -234,7 +236,7 @@ jobs:
           cp build/linux/PSNWDL.desktop "$archive_root/PSNWDL.desktop"
           cp build/appicon.png "$archive_root/PSNWDL.png"
           cp LICENSE "$archive_root/LICENSE"
-          tar -C archive -czf "staging/PSNWDL-$version-linux-${{ matrix.arch }}-portable.tar.gz" "PSNWDL-$version"
+          tar -C archive -czf "staging/PSNWDL-$version-linux-${{ matrix.release_arch }}-portable.tar.gz" "PSNWDL-$version"
 
           docker build \
             --build-arg NFPM_VERSION='${{ env.NFPM_VERSION }}' \
@@ -249,7 +251,7 @@ jobs:
             echo "Expected one Alpine APK, found ${#apks[@]}" >&2
             exit 1
           fi
-          mv "${apks[0]}" "staging/PSNWDL-$version-linux-${{ matrix.arch }}.apk"
+          mv "${apks[0]}" staging/
       - name: Build macOS packages
         if: matrix.os == 'darwin'
         shell: bash
@@ -257,14 +259,14 @@ jobs:
           wails3 task darwin:package:dmg ARCH=${{ matrix.arch }}
           mkdir -p staging
           version=$(tr -d '[:space:]' < VERSION)
-          mv bin/PSNWDL.dmg "staging/PSNWDL-$version-macos-${{ matrix.arch }}.dmg"
+          mv bin/PSNWDL.dmg "staging/PSNWDL-$version-macos-${{ matrix.release_arch }}.dmg"
           ditto -c -k --sequesterRsrc --keepParent \
             bin/PSNWDL.app \
-            "staging/PSNWDL-$version-macos-${{ matrix.arch }}-portable.zip"
+            "staging/PSNWDL-$version-macos-${{ matrix.release_arch }}-portable.zip"
       - name: Upload package artifacts
         uses: actions/upload-artifact@v6
         with:
-          name: PSNWDL-${{ matrix.os }}-${{ matrix.arch }}
+          name: PSNWDL-${{ matrix.os }}-${{ matrix.release_arch }}
           path: staging/*
           if-no-files-found: error
 

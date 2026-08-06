@@ -2,9 +2,9 @@
 
 Each GitHub release contains a `PSNWDL-<version>-linux-aur-source.tar.gz` source
 package. It contains the versioned `PKGBUILD` and `.SRCINFO` for the
-`psnwdl-bin` AUR package. The recipe downloads the matching prebuilt x86-64 or
-ARM64 tarball from GitHub Releases and declares `gtk4` and `webkitgtk-6.0` as
-runtime dependencies.
+`psnwdl-bin` AUR package. The recipe downloads the matching prebuilt
+`linux-x86_64` or `linux-aarch64` tarball from GitHub Releases and declares
+`gtk4` and `webkitgtk-6.0` as runtime dependencies.
 
 Publishing to the AUR requires a separate AUR account and SSH repository. After
 a GitHub release is available, extract its AUR source package, review it, and

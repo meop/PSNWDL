@@ -14,19 +14,19 @@ if ($Version -notmatch '^\d+\.\d+\.\d+(?:-[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?(?:
 }
 
 $artifactsPath = (Resolve-Path -LiteralPath $ArtifactsDirectory).Path
-$amd64Name = "PSNWDL-$Version-linux-amd64-portable.tar.gz"
-$arm64Name = "PSNWDL-$Version-linux-arm64-portable.tar.gz"
-$amd64Path = Join-Path $artifactsPath $amd64Name
-$arm64Path = Join-Path $artifactsPath $arm64Name
+$x8664Name = "PSNWDL-$Version-linux-x86_64-portable.tar.gz"
+$aarch64Name = "PSNWDL-$Version-linux-aarch64-portable.tar.gz"
+$x8664Path = Join-Path $artifactsPath $x8664Name
+$aarch64Path = Join-Path $artifactsPath $aarch64Name
 
-foreach ($path in @($amd64Path, $arm64Path)) {
+foreach ($path in @($x8664Path, $aarch64Path)) {
     if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
         throw "Required AUR source artifact does not exist: $path"
     }
 }
 
-$amd64Sha256 = (Get-FileHash -LiteralPath $amd64Path -Algorithm SHA256).Hash.ToLowerInvariant()
-$arm64Sha256 = (Get-FileHash -LiteralPath $arm64Path -Algorithm SHA256).Hash.ToLowerInvariant()
+$x8664Sha256 = (Get-FileHash -LiteralPath $x8664Path -Algorithm SHA256).Hash.ToLowerInvariant()
+$aarch64Sha256 = (Get-FileHash -LiteralPath $aarch64Path -Algorithm SHA256).Hash.ToLowerInvariant()
 $releaseBase = "https://github.com/meop/PSNWDL/releases/download/v$Version"
 $packageVersion = $Version.Replace('-', '_')
 
@@ -44,10 +44,10 @@ provides=('psnwdl')
 conflicts=('psnwdl')
 options=('!strip')
 
-source_x86_64=("@AMD64_NAME@::@RELEASE_BASE@/@AMD64_NAME@")
-source_aarch64=("@ARM64_NAME@::@RELEASE_BASE@/@ARM64_NAME@")
-sha256sums_x86_64=('@AMD64_SHA256@')
-sha256sums_aarch64=('@ARM64_SHA256@')
+source_x86_64=("@X86_64_NAME@::@RELEASE_BASE@/@X86_64_NAME@")
+source_aarch64=("@AARCH64_NAME@::@RELEASE_BASE@/@AARCH64_NAME@")
+sha256sums_x86_64=('@X86_64_SHA256@')
+sha256sums_aarch64=('@AARCH64_SHA256@')
 
 package() {
   local release_dir="${srcdir}/PSNWDL-@VERSION@"
@@ -73,22 +73,22 @@ pkgbase = psnwdl-bin
 	provides = psnwdl
 	conflicts = psnwdl
 	options = !strip
-	source_x86_64 = @AMD64_NAME@::@RELEASE_BASE@/@AMD64_NAME@
-	sha256sums_x86_64 = @AMD64_SHA256@
-	source_aarch64 = @ARM64_NAME@::@RELEASE_BASE@/@ARM64_NAME@
-	sha256sums_aarch64 = @ARM64_SHA256@
+	source_x86_64 = @X86_64_NAME@::@RELEASE_BASE@/@X86_64_NAME@
+	sha256sums_x86_64 = @X86_64_SHA256@
+	source_aarch64 = @AARCH64_NAME@::@RELEASE_BASE@/@AARCH64_NAME@
+	sha256sums_aarch64 = @AARCH64_SHA256@
 
 pkgname = psnwdl-bin
 '@
 
 $replacements = [ordered]@{
-    '@VERSION@'       = $Version
-    '@PKGVER@'        = $packageVersion
-    '@AMD64_NAME@'    = $amd64Name
-    '@ARM64_NAME@'    = $arm64Name
-    '@RELEASE_BASE@'  = $releaseBase
-    '@AMD64_SHA256@'  = $amd64Sha256
-    '@ARM64_SHA256@'  = $arm64Sha256
+    '@VERSION@'        = $Version
+    '@PKGVER@'         = $packageVersion
+    '@X86_64_NAME@'    = $x8664Name
+    '@AARCH64_NAME@'   = $aarch64Name
+    '@RELEASE_BASE@'   = $releaseBase
+    '@X86_64_SHA256@'  = $x8664Sha256
+    '@AARCH64_SHA256@' = $aarch64Sha256
 }
 
 foreach ($entry in $replacements.GetEnumerator()) {
