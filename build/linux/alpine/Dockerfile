@@ -2,7 +2,7 @@
 
 # APK packages target Alpine Linux, which uses musl rather than glibc. Build the
 # Wails binary inside Alpine so the package never contains the Ubuntu binary.
-FROM golang:1.25-alpine3.22 AS builder
+FROM golang:1.26-alpine3.22 AS builder
 
 ARG PNPM_VERSION=11.18.0
 ARG NFPM_VERSION=v2.47.0

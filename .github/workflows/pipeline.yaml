@@ -17,7 +17,7 @@ permissions:
   contents: read
 
 env:
-  GO_VERSION: '1.25.x'
+  GO_VERSION: '1.26.x'
   NFPM_VERSION: 'v2.47.0'
   NODE_VERSION: '26.3.1'
   PNPM_VERSION: '11.18.0'
