@@ -11,7 +11,7 @@ info:
   description: "Download and manage PlayStation content for RPCS3"
   copyright: "Copyright 2026 meop"
   comments: "PSNWDL desktop application"
-  version: "0.1.0"
+  version: "0.1.1"
   # cfBundleIconName: "appicon" # The macOS icon name in Assets.car icon bundles (optional)
   #                               # Should match the name of your .icon file without the extension
   #                               # If not set and Assets.car exists, defaults to "appicon"
