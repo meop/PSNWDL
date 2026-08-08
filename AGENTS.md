@@ -11,6 +11,7 @@ left behind that we then had to clean up.
 
 ```sh
 pwsh ./scripts/Sync-Version.ps1
+find . -name '*.go' -not -path './frontend/*' -print0 | xargs -0 gofmt -l   # must print nothing
 go build ./...
 go vet ./...
 go test ./...
@@ -18,6 +19,13 @@ wails3 generate bindings -clean=true -ts
 cd frontend && pnpm run build && pnpm run check
 cd .. && wails3 build
 ```
+
+This mirrors CI's `validate` job step for step — CI has a dedicated "Verify Go
+formatting" step (`gofmt -l`) that `go build`/`go vet`/`go test` do **not**
+substitute for; a struct-tag alignment change or similar can pass all three
+and still fail CI. Run `gofmt -l -w` on every `.go` file you touch, and rerun
+the `gofmt -l` check above (repo-wide, not just the files you remember
+touching) as the last step before committing.
 
 A change is not finished until **all** of these pass, and `pnpm run check`
 reports **`0 errors and 0 warnings`**. The "0 warnings" part is non-negotiable —
@@ -182,6 +190,12 @@ These all happened in a prior pass and were fixed — they tend to recur:
 - **`go test` passing declared as success.** Tests cover unit logic, not the
   wiring. A fully-built, type-checked, 0-warning frontend + binding generation
   exit 0 is the real gate.
+- **A struct field comment splits gofmt's tag-alignment group.** Inserting a
+  doc comment between two fields of a struct (e.g. to explain one new field)
+  re-partitions gofmt's column-alignment groups; `go build`/`go vet`/`go test`
+  all pass while CI's formatting check fails. This shipped two broken CI runs
+  before being caught. Run `gofmt -l -w` on the whole repo, not just files you
+  remember editing, right before every push.
 - **Platform assumptions.** Hardcoded `explorer`, hardcoded `~` expansion that
   only works in one shell, etc. Default to cross-platform.
 
