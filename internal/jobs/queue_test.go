@@ -437,7 +437,7 @@ func TestRetryFirmwarePreservesRegion(t *testing.T) {
 		State:   StateFailed,
 	}
 
-	if err := q.Retry("job-failed"); err != nil {
+	if err := q.Retry(context.Background(), "job-failed"); err != nil {
 		t.Fatalf("Retry: %v", err)
 	}
 

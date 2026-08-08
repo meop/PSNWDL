@@ -15,7 +15,7 @@ const _jobs = writable<Job[]>([])
 let wired = false
 
 export const jobsList = { subscribe: _jobs.subscribe }
-const ACTIVE_JOB_STATES = new Set(['queued', 'downloading', 'paused', 'resuming', 'verifying'])
+export const ACTIVE_JOB_STATES = new Set(['queued', 'downloading', 'paused', 'resuming', 'verifying'])
 export const activeJobsList = derived(_jobs, (jobs) => jobs.filter((job) => ACTIVE_JOB_STATES.has(String(job.state))))
 
 function upsert(j: Job) {

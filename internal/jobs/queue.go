@@ -279,7 +279,10 @@ func (q *Queue) Resume(id string) error {
 }
 
 // Retry re-queues a failed or canceled job, clearing any partial download.
-func (q *Queue) Retry(id string) error {
+// ctx should be the same parent the caller uses for fresh Enqueue calls, so a
+// retried job shares the same cancellation lineage as an original one instead
+// of running detached from the app's lifecycle.
+func (q *Queue) Retry(ctx context.Context, id string) error {
 	q.mu.Lock()
 	j, ok := q.jobs[id]
 	if !ok {
@@ -307,7 +310,7 @@ func (q *Queue) Retry(id string) error {
 		return fmt.Errorf("remove partial file: %w", err)
 	}
 
-	_, err := q.Enqueue(context.Background(), newReq)
+	_, err := q.Enqueue(ctx, newReq)
 	return err
 }
 

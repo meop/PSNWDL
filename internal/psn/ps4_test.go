@@ -1,9 +1,14 @@
 package psn
 
 import (
-	"errors"
+	"bytes"
+	"context"
+	"io"
+	"net/http"
 	"strings"
 	"testing"
+
+	"PSNWDL/internal/activity"
 )
 
 // validPS4VerXML is a synthetic fixture mirroring the PS4 titlepatch XML
@@ -55,9 +60,12 @@ func TestParsePS4VerXML_TitleMismatch(t *testing.T) {
 }
 
 func TestParsePS4VerXML_Empty(t *testing.T) {
-	_, err := parsePS4VerXML(nil, "CUSA00001")
-	if !errors.Is(err, ErrEmptyResponse) {
-		t.Errorf("expected ErrEmptyResponse, got %v", err)
+	got, err := parsePS4VerXML(nil, "CUSA00001")
+	if err != nil {
+		t.Fatalf("parse empty response: %v", err)
+	}
+	if got.ID != "CUSA00001" || len(got.Updates) != 0 {
+		t.Errorf("empty response = %+v, want title with no updates", got)
 	}
 }
 
@@ -106,5 +114,37 @@ func TestPS4HMAC_KnownValue(t *testing.T) {
 	got := ps4HMAC("CUSA00001")
 	if got != wantPS4HMAC {
 		t.Errorf("ps4HMAC(CUSA00001) = %q, want %q", got, wantPS4HMAC)
+	}
+}
+
+// TestLookupPS4TreatsEmptyResponsesAsNoUpdates mirrors PS3's equivalent test:
+// a title with no published updates must resolve successfully with zero
+// Updates, not as an error, regardless of whether Sony signals that via an
+// empty 200 body, a 204, or a 404.
+func TestLookupPS4TreatsEmptyResponsesAsNoUpdates(t *testing.T) {
+	for _, status := range []int{http.StatusOK, http.StatusNoContent, http.StatusNotFound} {
+		t.Run(http.StatusText(status), func(t *testing.T) {
+			client := &Client{
+				http: &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+					if req.Method != http.MethodGet || !strings.Contains(req.URL.Path, "CUSA00001-ver.xml") {
+						t.Fatalf("unexpected request: %s %s", req.Method, req.URL)
+					}
+					return &http.Response{
+						StatusCode: status,
+						Body:       io.NopCloser(bytes.NewReader(nil)),
+						Header:     make(http.Header),
+					}, nil
+				})},
+				activity: activity.NewSink(nil),
+			}
+
+			title, err := client.LookupPS4(context.Background(), "CUSA00001")
+			if err != nil {
+				t.Fatalf("LookupPS4: %v", err)
+			}
+			if title.ID != "CUSA00001" || len(title.Updates) != 0 {
+				t.Fatalf("title = %+v, want no updates", title)
+			}
+		})
 	}
 }

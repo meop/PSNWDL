@@ -2,6 +2,7 @@
   import { CancelJob } from '../../bindings/PSNWDL/app'
   import type * as jobs from '../../bindings/PSNWDL/internal/jobs'
   import { activeJobsList } from '../app/jobsStore.svelte'
+  import { formatSize } from '../app/format'
 
   let queueError = $state<string | null>(null)
 
@@ -12,18 +13,6 @@
     } catch (e) {
       queueError = e instanceof Error ? e.message : String(e)
     }
-  }
-
-  function formatSize(bytes: number | undefined): string {
-    if (!bytes || bytes <= 0) return '-'
-    const units = ['B', 'KB', 'MB', 'GB', 'TB']
-    let value = bytes
-    let unit = 0
-    while (value >= 1024 && unit < units.length - 1) {
-      value /= 1024
-      unit++
-    }
-    return `${value.toFixed(unit === 0 ? 0 : 1)} ${units[unit]}`
   }
 
   function formatProgress(job: jobs.Job): string {

@@ -18,6 +18,14 @@ export class Row {
     "title_id": string;
     "name"?: string;
     "install_dir": string;
+
+    /**
+     * Missing is true when InstallDir no longer exists on disk (e.g. the game
+     * was deleted from a removable drive but the games.yml entry, and any
+     * dev_hdd0/game update data, was left behind). RPCS3 itself hides such
+     * entries from its own game list; the frontend defaults to the same.
+     */
+    "missing": boolean;
     "status": Status;
     "downloaded_count": number;
     "update_count": number;
@@ -31,6 +39,9 @@ export class Row {
         }
         if (!("install_dir" in $$source)) {
             this["install_dir"] = "";
+        }
+        if (!("missing" in $$source)) {
+            this["missing"] = false;
         }
         if (!("status" in $$source)) {
             this["status"] = Status.$zero;
@@ -49,10 +60,10 @@ export class Row {
      * Creates a new Row instance from a string or object.
      */
     static createFrom($$source: any = {}): Row {
-        const $$createField6_0 = $$createType1;
+        const $$createField7_0 = $$createType1;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("updates" in $$parsedSource) {
-            $$parsedSource["updates"] = $$createField6_0($$parsedSource["updates"]);
+            $$parsedSource["updates"] = $$createField7_0($$parsedSource["updates"]);
         }
         return new Row($$parsedSource as Partial<Row>);
     }

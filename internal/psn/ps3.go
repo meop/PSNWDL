@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/xml"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -89,7 +88,7 @@ func (c *Client) LookupPS3WithDRMFree(ctx context.Context, tid string, includeDR
 	c.activity.Infof("psn", "Response status: %d", resp.StatusCode)
 	if resp.StatusCode == http.StatusNoContent || resp.StatusCode == http.StatusNotFound {
 		c.activity.Infof("psn", "No updates published for %s", tid)
-		return emptyPS3Title(tid), nil
+		return emptyTitle(tid), nil
 	}
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("ver.xml: status %d", resp.StatusCode)
@@ -146,17 +145,13 @@ type ps3URLNode struct {
 	URL     string `xml:"url,attr"`
 }
 
-// ErrEmptyResponse is returned by endpoints where an empty successful response
-// is invalid. PS3 uses an empty response to mean that no updates are published.
-var ErrEmptyResponse = errors.New("empty ver.xml response")
-
 func parsePS3VerXML(body []byte, expectedTID string) (*Title, error) {
 	return parsePS3VerXMLWithOptions(body, expectedTID, false)
 }
 
 func parsePS3VerXMLWithOptions(body []byte, expectedTID string, includeDRMFree bool) (*Title, error) {
 	if len(body) == 0 {
-		return emptyPS3Title(expectedTID), nil
+		return emptyTitle(expectedTID), nil
 	}
 
 	var tp ps3TitlePatch
@@ -207,8 +202,4 @@ func parsePS3VerXMLWithOptions(body []byte, expectedTID string, includeDRMFree b
 	}
 
 	return t, nil
-}
-
-func emptyPS3Title(titleID string) *Title {
-	return &Title{ID: titleID, Updates: []Update{}}
 }

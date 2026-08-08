@@ -2,6 +2,7 @@ package library
 
 import (
 	"context"
+	"encoding/binary"
 	"errors"
 	"os"
 	"path/filepath"
@@ -10,6 +11,53 @@ import (
 	"PSNWDL/internal/psn"
 	"PSNWDL/internal/rpcs3"
 )
+
+// buildTestSFO constructs a minimal PARAM.SFO binary containing TITLE_ID and
+// TITLE, matching the layout internal/pkg.ParseSFO expects.
+func buildTestSFO(t *testing.T, titleID, title string) []byte {
+	t.Helper()
+	entries := []struct{ k, v string }{{"TITLE", title}, {"TITLE_ID", titleID}}
+
+	headerSize := 0x14
+	entryAreaSize := len(entries) * 0x10
+	keyTableStart := headerSize + entryAreaSize
+	keyTableSize := 0
+	for _, e := range entries {
+		keyTableSize += len(e.k) + 1
+	}
+	dataTableStart := keyTableStart + keyTableSize
+
+	type valInfo struct{ off, size int }
+	valInfos := make([]valInfo, len(entries))
+	off := 0
+	for i, e := range entries {
+		valInfos[i] = valInfo{off: off, size: len(e.v) + 1}
+		off += len(e.v) + 1
+	}
+
+	buf := make([]byte, dataTableStart+off)
+	copy(buf[0:4], []byte{0x00, 'P', 'S', 'F'})
+	binary.LittleEndian.PutUint32(buf[0x08:0x0C], uint32(keyTableStart))
+	binary.LittleEndian.PutUint32(buf[0x0C:0x10], uint32(dataTableStart))
+	binary.LittleEndian.PutUint32(buf[0x10:0x14], uint32(len(entries)))
+
+	keyPos := 0
+	for i, e := range entries {
+		entryOff := 0x14 + i*0x10
+		binary.LittleEndian.PutUint16(buf[entryOff:], uint16(keyPos))
+		binary.LittleEndian.PutUint16(buf[entryOff+2:], 0x0204)
+		binary.LittleEndian.PutUint32(buf[entryOff+4:], uint32(valInfos[i].size))
+		binary.LittleEndian.PutUint32(buf[entryOff+8:], uint32(valInfos[i].size))
+		binary.LittleEndian.PutUint32(buf[entryOff+12:], uint32(valInfos[i].off))
+
+		copy(buf[keyTableStart+keyPos:], e.k)
+		buf[keyTableStart+keyPos+len(e.k)] = 0
+		keyPos += len(e.k) + 1
+
+		copy(buf[dataTableStart+valInfos[i].off:], e.v)
+	}
+	return buf
+}
 
 type fakePSN struct {
 	titles map[string]*psn.Title
@@ -65,7 +113,7 @@ func TestReconcilePS3UsesExactDownloadedCounts(t *testing.T) {
 		{TitleID: "NPUB30528"},
 		{TitleID: "NPHA80100"},
 	}
-	rows := ReconcilePS3(context.Background(), entries, fake, root)
+	rows := ReconcilePS3(context.Background(), entries, fake, root, "")
 	want := map[string]Status{
 		"BCUS98114": StatusAllDownloaded,
 		"BLES01234": StatusSomeDownloaded,
@@ -77,6 +125,83 @@ func TestReconcilePS3UsesExactDownloadedCounts(t *testing.T) {
 		if row.Status != want[row.TitleID] {
 			t.Errorf("%s status = %s, want %s", row.TitleID, row.Status, want[row.TitleID])
 		}
+	}
+}
+
+func TestReconcileOneUsesLocalSFONameOverNetwork(t *testing.T) {
+	root := t.TempDir()
+	installDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(installDir, "PARAM.SFO"), buildTestSFO(t, "NPHA80100", "Local Disc Title"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	fake := &fakePSN{titles: map[string]*psn.Title{
+		"NPHA80100": {ID: "NPHA80100", Name: "Network Title"},
+	}}
+
+	row := reconcileOne(context.Background(), rpcs3.Entry{TitleID: "NPHA80100", InstallDir: installDir}, fake, root, "")
+	if row.Name != "Local Disc Title" {
+		t.Fatalf("Name = %q, want local SFO title to win", row.Name)
+	}
+}
+
+// TestReconcileOneLeavesNameEmptyWithoutLocalSFO asserts we deliberately do
+// NOT fall back to the PSN-supplied name: RPCS3 has no web lookup, so a title
+// it can't label locally should render the same way here (falling back to
+// the title ID in the UI), not diverge by picking up a name RPCS3 itself
+// never shows.
+func TestReconcileOneLeavesNameEmptyWithoutLocalSFO(t *testing.T) {
+	root := t.TempDir()
+	fake := &fakePSN{titles: map[string]*psn.Title{
+		"NPHA80100": {ID: "NPHA80100", Name: "Network Title"},
+	}}
+
+	row := reconcileOne(context.Background(), rpcs3.Entry{TitleID: "NPHA80100"}, fake, root, "")
+	if row.Name != "" {
+		t.Fatalf("Name = %q, want empty (no local SFO to source a name from)", row.Name)
+	}
+}
+
+func TestReconcileOneUsesLocalSFONameWhenNoUpdatesPublished(t *testing.T) {
+	root := t.TempDir()
+	hdd0Game := t.TempDir()
+	titleDir := filepath.Join(hdd0Game, "NPHA80100")
+	if err := os.MkdirAll(titleDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(titleDir, "PARAM.SFO"), buildTestSFO(t, "NPHA80100", "Installed Title"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// No entry for NPHA80100 in fake.titles: LookupPS3 returns an empty
+	// Title (mirroring the real client's response for titles with no
+	// published updates), same as fakePSN's default fallback.
+	fake := &fakePSN{}
+
+	row := reconcileOne(context.Background(), rpcs3.Entry{TitleID: "NPHA80100"}, fake, root, hdd0Game)
+	if row.Name != "Installed Title" {
+		t.Fatalf("Name = %q, want name from dev_hdd0/game PARAM.SFO", row.Name)
+	}
+}
+
+func TestReconcileOneMissingReflectsInstallDirExistence(t *testing.T) {
+	root := t.TempDir()
+	installDir := t.TempDir()
+	fake := &fakePSN{}
+
+	present := reconcileOne(context.Background(), rpcs3.Entry{TitleID: "NPHA80100", InstallDir: installDir}, fake, root, "")
+	if present.Missing {
+		t.Errorf("Missing = true for an install_dir that exists, want false")
+	}
+
+	gone := reconcileOne(context.Background(), rpcs3.Entry{TitleID: "NPHA80100", InstallDir: filepath.Join(installDir, "deleted")}, fake, root, "")
+	if !gone.Missing {
+		t.Errorf("Missing = false for an install_dir that doesn't exist, want true")
+	}
+
+	empty := reconcileOne(context.Background(), rpcs3.Entry{TitleID: "NPHA80100"}, fake, root, "")
+	if !empty.Missing {
+		t.Errorf("Missing = false for an empty install_dir, want true")
 	}
 }
 

@@ -60,6 +60,10 @@ func (c *Client) LookupPS4(ctx context.Context, tid string) (*Title, error) {
 	defer resp.Body.Close()
 
 	c.activity.Infof("psn", "Response status: %d", resp.StatusCode)
+	if resp.StatusCode == http.StatusNoContent || resp.StatusCode == http.StatusNotFound {
+		c.activity.Infof("psn", "No updates published for %s", tid)
+		return emptyTitle(tid), nil
+	}
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("ps4 ver.xml: status %d", resp.StatusCode)
 	}
@@ -117,7 +121,7 @@ type ps4Package struct {
 
 func parsePS4VerXML(body []byte, expectedTID string) (*Title, error) {
 	if len(body) == 0 {
-		return nil, ErrEmptyResponse
+		return emptyTitle(expectedTID), nil
 	}
 
 	var tp ps4TitlePatch

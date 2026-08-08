@@ -3,11 +3,10 @@
   import { activityEntries, clearActivityLog, formatLogLine } from '../app/activityStore.svelte'
 
   interface Props {
-    compact?: boolean
     embedded?: boolean
   }
 
-  let { compact = false, embedded = false }: Props = $props()
+  let { embedded = false }: Props = $props()
 
   let logEntries = $derived($activityEntries)
   let selectedScope = $state<string>('all')
@@ -58,7 +57,7 @@
   }
 </script>
 
-<div class:page={!compact && !embedded} class:h-full={embedded} class:min-h-0={embedded} class:flex={embedded} class:flex-col={embedded}>
+<div class:page={!embedded} class:h-full={embedded} class:min-h-0={embedded} class:flex={embedded} class:flex-col={embedded}>
   <div class="{embedded ? 'mb-0 border-b border-border px-3 py-2' : 'page-header'} flex items-center justify-between gap-3">
     <div>
       <h1 class="{embedded ? 'text-[0.95rem] font-[650] leading-[1.2] text-fg-strong' : 'page-title'}">Activity</h1>
@@ -87,7 +86,7 @@
 
   <div
     bind:this={logContainer}
-    class="{embedded ? 'min-h-0 flex-1 rounded-none border-0' : compact ? 'h-[calc(100vh-14rem)]' : 'h-[calc(100vh-12rem)]'} overflow-y-auto rounded border border-border bg-inset p-3 font-mono text-xs"
+    class="{embedded ? 'min-h-0 flex-1 rounded-none border-0' : 'h-[calc(100vh-12rem)]'} overflow-y-auto rounded border border-border bg-inset p-3 font-mono text-xs"
   >
     {#if filteredEntries.length === 0}
       <p class="text-muted-faint">No activity yet</p>

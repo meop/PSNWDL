@@ -16,3 +16,10 @@ type Title struct {
 	Name    string   `json:"name,omitempty"`
 	Updates []Update `json:"updates"`
 }
+
+// emptyTitle builds a Title with no updates. Sony's title-update endpoints
+// use an empty/204/404 response to mean "no updates published" for a valid
+// title ID, not an error — every console's Lookup* treats it this way.
+func emptyTitle(titleID string) *Title {
+	return &Title{ID: titleID, Updates: []Update{}}
+}

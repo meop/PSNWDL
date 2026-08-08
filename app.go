@@ -287,7 +287,7 @@ func (a *App) EnqueueDownload(req jobs.Request) (string, error) {
 func (a *App) CancelJob(id string) error { return a.jobs.Cancel(id) }
 func (a *App) PauseJob(id string) error  { return a.jobs.Pause(id) }
 func (a *App) ResumeJob(id string) error { return a.jobs.Resume(id) }
-func (a *App) RetryJob(id string) error  { return a.jobs.Retry(id) }
+func (a *App) RetryJob(id string) error  { return a.jobs.Retry(a.ctx, id) }
 
 func (a *App) ListJobs() []jobs.Job { return a.jobs.List() }
 
@@ -327,7 +327,7 @@ func (a *App) ListRPCS3Library() ([]rpcs3.Entry, error) {
 // ReconcileTitlePS3 resolves one already-parsed RPCS3 row so the frontend can
 // publish the local games.yml list immediately and fill server state per row.
 func (a *App) ReconcileTitlePS3(entry rpcs3.Entry) library.Row {
-	row := library.ReconcileTitlePS3(a.ctx, entry, a.psn, a.cfg.Storage.LibraryDir)
+	row := library.ReconcileTitlePS3(a.ctx, entry, a.psn, a.cfg.Storage.LibraryDir, a.cfg.RPCS3.HDD0Game)
 	if row.Status == library.StatusUnreachable {
 		a.activity.Warnf("library", "%s: reconcile failed (%s)", row.TitleID, row.Error)
 	}
@@ -419,30 +419,41 @@ func (a *App) removeNonRPCS3TitleFolders(entries []rpcs3.Entry) error {
 }
 
 func (a *App) removableSyncTargets(targets []string) []string {
+	removable, blocked := partitionSyncTargets(targets, a.jobs.List())
+	for _, target := range blocked {
+		a.activity.Warnf("library", "Skipped removing %s because an active download uses it", target)
+	}
+	return removable
+}
+
+// partitionSyncTargets splits targets into those safe to delete and those
+// blocked because an active job is still writing into them. It is a pure
+// function of its inputs (no App/Queue dependency) so the path-containment
+// logic can be unit tested directly with literal job lists.
+func partitionSyncTargets(targets []string, activeJobs []jobs.Job) (removable, blocked []string) {
 	protected := []string{}
-	for _, job := range a.jobs.List() {
+	for _, job := range activeJobs {
 		switch job.State {
 		case jobs.StateQueued, jobs.StateDownloading, jobs.StatePaused, jobs.StateResuming, jobs.StateVerifying:
 			protected = append(protected, job.DestPath, job.DestPath+".part")
 		}
 	}
-	removable := make([]string, 0, len(targets))
 	for _, target := range targets {
-		blocked := false
+		isBlocked := false
 		for _, activePath := range protected {
 			rel, err := filepath.Rel(target, activePath)
 			if err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) && !filepath.IsAbs(rel) {
-				blocked = true
+				isBlocked = true
 				break
 			}
 		}
-		if blocked {
-			a.activity.Warnf("library", "Skipped removing %s because an active download uses it", target)
+		if isBlocked {
+			blocked = append(blocked, target)
 			continue
 		}
 		removable = append(removable, target)
 	}
-	return removable
+	return removable, blocked
 }
 
 // OpenFolder opens the given directory in the system's file manager.

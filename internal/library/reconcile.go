@@ -9,6 +9,7 @@ import (
 	stdsync "sync"
 
 	"PSNWDL/internal/config"
+	"PSNWDL/internal/pkg"
 	"PSNWDL/internal/psn"
 	"PSNWDL/internal/rpcs3"
 )
@@ -30,9 +31,14 @@ const (
 // the download library. Installation state is deliberately not part of this
 // view; the Emulator pane owns synchronization, while Library owns stored files.
 type Row struct {
-	TitleID         string       `json:"title_id"`
-	Name            string       `json:"name,omitempty"`
-	InstallDir      string       `json:"install_dir"`
+	TitleID    string `json:"title_id"`
+	Name       string `json:"name,omitempty"`
+	InstallDir string `json:"install_dir"`
+	// Missing is true when InstallDir no longer exists on disk (e.g. the game
+	// was deleted from a removable drive but the games.yml entry, and any
+	// dev_hdd0/game update data, was left behind). RPCS3 itself hides such
+	// entries from its own game list; the frontend defaults to the same.
+	Missing         bool         `json:"missing"`
 	Status          Status       `json:"status"`
 	DownloadedCount int          `json:"downloaded_count"`
 	UpdateCount     int          `json:"update_count"`
@@ -54,7 +60,7 @@ type PSNLookup interface {
 	LookupPS3(ctx context.Context, tid string) (*psn.Title, error)
 }
 
-func ReconcilePS3(ctx context.Context, entries []rpcs3.Entry, client PSNLookup, libraryRoot string) []Row {
+func ReconcilePS3(ctx context.Context, entries []rpcs3.Entry, client PSNLookup, libraryRoot, hdd0Game string) []Row {
 	if len(entries) == 0 {
 		return []Row{}
 	}
@@ -69,19 +75,26 @@ func ReconcilePS3(ctx context.Context, entries []rpcs3.Entry, client PSNLookup, 
 		go func(i int, entry rpcs3.Entry) {
 			defer wg.Done()
 			defer func() { <-sem }()
-			rows[i] = reconcileOne(ctx, entry, client, libraryRoot)
+			rows[i] = reconcileOne(ctx, entry, client, libraryRoot, hdd0Game)
 		}(i, entry)
 	}
 	wg.Wait()
 	return rows
 }
 
-func ReconcileTitlePS3(ctx context.Context, entry rpcs3.Entry, client PSNLookup, libraryRoot string) Row {
-	return reconcileOne(ctx, entry, client, libraryRoot)
+func ReconcileTitlePS3(ctx context.Context, entry rpcs3.Entry, client PSNLookup, libraryRoot, hdd0Game string) Row {
+	return reconcileOne(ctx, entry, client, libraryRoot, hdd0Game)
 }
 
-func reconcileOne(ctx context.Context, entry rpcs3.Entry, client PSNLookup, libraryRoot string) Row {
-	row := Row{TitleID: entry.TitleID, InstallDir: entry.InstallDir}
+func reconcileOne(ctx context.Context, entry rpcs3.Entry, client PSNLookup, libraryRoot, hdd0Game string) Row {
+	row := Row{TitleID: entry.TitleID, InstallDir: entry.InstallDir, Missing: !installDirExists(entry.InstallDir)}
+	// Name comes only from the locally installed PARAM.SFO — the same source
+	// RPCS3 itself reads. We deliberately do not fall back to the PSN-supplied
+	// name: RPCS3 has no web lookup at all, so a title it can't label (missing
+	// or unreadable PARAM.SFO) should show the same way here, not diverge by
+	// picking up a name from a source RPCS3 never consults.
+	row.Name = localTitleName(entry, hdd0Game)
+
 	title, err := client.LookupPS3(ctx, entry.TitleID)
 	if err != nil {
 		row.Status = StatusUnreachable
@@ -89,7 +102,6 @@ func reconcileOne(ctx context.Context, entry rpcs3.Entry, client PSNLookup, libr
 		return row
 	}
 
-	row.Name = title.Name
 	row.Updates = title.Updates
 	plan, err := PlanTitleSync(libraryRoot, "ps3", entry.TitleID, title.Updates)
 	if err != nil {
@@ -101,6 +113,50 @@ func reconcileOne(ctx context.Context, entry rpcs3.Entry, client PSNLookup, libr
 	row.UpdateCount = plan.UpdateCount
 	row.Status = statusForCounts(plan.DownloadedCount, plan.UpdateCount)
 	return row
+}
+
+// localTitleName resolves a title's display name from a locally readable
+// PARAM.SFO when Sony's ver.xml has none to offer (e.g. titles with no
+// published updates return an empty response, so the PSN lookup never sees
+// a PARAM.SFO to read TITLE from). This mirrors how RPCS3 itself labels
+// entries in its own game list: from the installed copy's PARAM.SFO, not
+// from the network. Candidates are tried in order and the first hit wins;
+// the TITLE field is expected to be the same across an install's versions.
+func localTitleName(entry rpcs3.Entry, hdd0Game string) string {
+	candidates := make([]string, 0, 3)
+	if entry.InstallDir != "" {
+		candidates = append(candidates,
+			filepath.Join(entry.InstallDir, "PARAM.SFO"),
+			filepath.Join(entry.InstallDir, "PS3_GAME", "PARAM.SFO"),
+		)
+	}
+	if hdd0Game != "" {
+		candidates = append(candidates, filepath.Join(hdd0Game, entry.TitleID, "PARAM.SFO"))
+	}
+
+	for _, path := range candidates {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			continue
+		}
+		info, err := pkg.ParseSFO(data)
+		if err != nil || info.Title == "" {
+			continue
+		}
+		return info.Title
+	}
+	return ""
+}
+
+// installDirExists reports whether entry.InstallDir still resolves to a real
+// directory. RPCS3 filters its own game list on exactly this condition; an
+// empty InstallDir (malformed games.yml entry) is treated as missing too.
+func installDirExists(installDir string) bool {
+	if installDir == "" {
+		return false
+	}
+	info, err := os.Stat(installDir)
+	return err == nil && info.IsDir()
 }
 
 func statusForCounts(downloaded, total int) Status {

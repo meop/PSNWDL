@@ -25,10 +25,12 @@
   import * as library from '../../bindings/PSNWDL/internal/library'
   import * as rpcs3 from '../../bindings/PSNWDL/internal/rpcs3'
   import { cache, ensureFirmware, fetching } from '../app/firmwareStore.svelte'
-  import { jobsList } from '../app/jobsStore.svelte'
+  import { ACTIVE_JOB_STATES, jobsList } from '../app/jobsStore.svelte'
   import { libraryState as emulatorState } from '../app/libraryStore.svelte'
   import { downloadLibraryState as libraryState } from '../app/downloadLibraryStore.svelte'
   import { queuedKey, searchState } from '../app/searchStore.svelte'
+  import { formatSize } from '../app/format'
+  import EmptyState from '../components/EmptyState.svelte'
   import Activity from './Activity.svelte'
 
   interface Props {
@@ -40,7 +42,6 @@
   type Source = 'title' | 'firmware'
   type Title = downloads.Title
   type File = downloads.File
-  const ACTIVE_JOB_STATES = new Set(['queued', 'downloading', 'paused', 'resuming', 'verifying'])
   const EMULATOR_COLUMN_LABELS = ['Title', 'Status', 'Action']
 
   let { mode, defaultDownload = 'firmware', appConfig }: Props = $props()
@@ -63,6 +64,7 @@
   let pendingPKGError = $state<string | null>(null)
   let pendingPKGGeneration = 0
   let includeDRMFree = $state(false)
+  let showMissingInstalls = $state(false)
   let lastMode = $state<Mode>(initialMode)
   let emulatorRefreshing = $state(false)
   let emulatorRefreshGeneration = 0
@@ -136,7 +138,7 @@
     emulatorSyncJobIDs = []
   })
 
-  let allDownloadRows = $derived.by(() => {
+  let downloadRows = $derived.by(() => {
     const rows: DownloadRow[] = []
     if (source === 'title' && titleState.result) {
       for (const update of titleState.result.updates ?? []) {
@@ -179,7 +181,6 @@
     }
     return rows.sort((a, b) => compareVersion(b.version, a.version))
   })
-  let downloadRows = $derived(allDownloadRows)
 
   interface DownloadRow {
     key: string
@@ -201,6 +202,10 @@
   let gameLibraryTitles = $derived(modeLibraryTitles.filter((title) => title.title_id !== 'firmware'))
   let firmwareLibraryRoot = $derived(firmwareLibraryRegions.length > 0 ? parentPath(firmwareLibraryRegions[0].path) : '')
   let titleLibraryRoot = $derived(gameLibraryTitles.length > 0 ? parentPath(gameLibraryTitles[0].path) : '')
+  let missingInstallCount = $derived(emulatorState.rows.filter((row) => row.missing).length)
+  let visibleEmulatorRows = $derived(
+    showMissingInstalls ? emulatorState.rows : emulatorState.rows.filter((row) => !row.missing)
+  )
 
   async function ensureEmulatorBooted() {
     if (emulatorState.initialized) return
@@ -651,19 +656,6 @@
     setTableMinWidth(table, measured.total + applied)
   }
 
-  function formatSize(bytes: number | undefined): string {
-    if (!bytes || bytes <= 0) return '-'
-    if (bytes < 1024) return `${bytes} B`
-    const units = ['KB', 'MB', 'GB', 'TB']
-    let v = bytes / 1024
-    let i = 0
-    while (v >= 1024 && i < units.length - 1) {
-      v /= 1024
-      i++
-    }
-    return `${v.toFixed(1)} ${units[i]}`
-  }
-
   function compareVersion(a: string, b: string): number {
     return a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' })
   }
@@ -748,11 +740,9 @@
 
     <div class="min-h-0 flex-1 overflow-auto">
       {#if firmwareLoading}
-        <div class="empty">Loading latest firmware</div>
+        <EmptyState message="Loading latest firmware" />
       {:else if downloadRows.length === 0}
-        <div class="empty">
-          {source === 'title' ? 'Title update results' : 'Latest firmware by region'}
-        </div>
+        <EmptyState message={source === 'title' ? 'Title update results' : 'Latest firmware by region'} />
       {:else}
         <table class="data-table table-fixed" style={downloadTableMinWidth ? `min-width: ${downloadTableMinWidth}px` : undefined}>
           <colgroup>
@@ -814,6 +804,10 @@
       </div>
       {#if mode === 'ps3'}
         <div class="flex flex-wrap items-center justify-end gap-2">
+          <label class="flex items-center gap-1 text-xs text-muted">
+            <input type="checkbox" bind:checked={showMissingInstalls} />
+            Include orphans
+          </label>
           <button
             onclick={syncAllNeeded}
             disabled={!canSyncAll()}
@@ -836,9 +830,9 @@
     </div>
 
     {#if mode !== 'ps3'}
-      <div class="empty">No emulator actions for {mode.toUpperCase()}</div>
+      <EmptyState message={`No emulator actions for ${mode.toUpperCase()}`} />
     {:else if !emulatorState.cfg}
-      <div class="empty">Loading emulator settings</div>
+      <EmptyState message="Loading emulator settings" />
     {:else}
       {#if isMissingGamesConfig() || isMissingInstallConfig() || emulatorState.loadError || emulatorError || pendingPKGError}
         <div class="border-b border-error/40 bg-error-bg px-3 py-2 text-xs text-error-fg">
@@ -853,9 +847,13 @@
 
       <div class="min-h-0 flex-1 overflow-auto">
         {#if emulatorState.loading}
-          <div class="empty">Reconciling emulator library</div>
+          <EmptyState message="Reconciling emulator library" />
         {:else if emulatorState.rows.length === 0}
-          <div class="empty">Emulator titles</div>
+          <EmptyState message="Emulator titles" />
+        {:else if visibleEmulatorRows.length === 0}
+          <EmptyState
+            message={`All ${missingInstallCount} title(s) are missing their install folder — check "Include orphans" to view them`}
+          />
         {:else}
           <table class="data-table table-fixed" style={emulatorTableMinWidth ? `min-width: ${emulatorTableMinWidth}px` : undefined}>
             <colgroup>
@@ -880,7 +878,7 @@
               </tr>
             </thead>
             <tbody>
-              {#each emulatorState.rows as row (row.title_id)}
+              {#each visibleEmulatorRows as row (row.title_id)}
                 <tr>
                   <td>
                     <div class="max-w-48 truncate" title={row.install_dir}>{row.name || row.title_id}</div>
@@ -931,9 +929,9 @@
 
     <div class="min-h-0 flex-1 overflow-auto">
         {#if libraryState.loading && modeLibraryTitles.length === 0}
-          <div class="empty">Loading library</div>
+          <EmptyState message="Loading library" />
         {:else if modeLibraryTitles.length === 0}
-          <div class="empty">Downloaded firmware and title updates</div>
+          <EmptyState message="Downloaded firmware and title updates" />
         {:else}
           <div class="divide-y divide-border text-xs" role="tree" aria-label="Downloaded library">
             {#if firmwareLibraryRegions.length > 0}
@@ -1129,8 +1127,8 @@
     grid-template-columns: minmax(24rem, 1fr) minmax(24rem, 1fr);
     grid-template-rows: minmax(17rem, 1fr) minmax(17rem, 1fr);
     grid-template-areas:
-      'downloader activity'
-      'library emulator';
+      'library activity'
+      'downloader emulator';
     gap: 0.75rem;
     min-height: 0;
     height: 100%;
@@ -1261,12 +1259,6 @@
     gap: 0.5rem;
     padding-top: 0.375rem;
     padding-bottom: 0.375rem;
-  }
-
-  .empty {
-    color: var(--c-muted-soft);
-    font-size: 0.875rem;
-    padding: 0.75rem;
   }
 
   @media (max-width: 900px) {
