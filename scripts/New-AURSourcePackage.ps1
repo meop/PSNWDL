@@ -14,8 +14,8 @@ if ($Version -notmatch '^\d+\.\d+\.\d+(?:-[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?(?:
 }
 
 $artifactsPath = (Resolve-Path -LiteralPath $ArtifactsDirectory).Path
-$x8664Name = "PSNWDL-$Version-linux-x86_64-portable.tar.gz"
-$aarch64Name = "PSNWDL-$Version-linux-aarch64-portable.tar.gz"
+$x8664Name = "psnwdl-$Version-linux-x86_64-portable.tar.gz"
+$aarch64Name = "psnwdl-$Version-linux-aarch64-portable.tar.gz"
 $x8664Path = Join-Path $artifactsPath $x8664Name
 $aarch64Path = Join-Path $artifactsPath $aarch64Name
 
@@ -111,7 +111,7 @@ try {
         [System.Text.UTF8Encoding]::new($false)
     )
 
-    $outputName = "PSNWDL-$Version-linux-aur-source.tar.gz"
+    $outputName = "psnwdl-$Version-linux-aur-source.tar.gz"
     $outputPath = Join-Path $artifactsPath $outputName
     & tar -C $temporaryDirectory -czf $outputPath PKGBUILD .SRCINFO
     if ($LASTEXITCODE -ne 0) {

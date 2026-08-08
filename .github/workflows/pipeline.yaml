@@ -211,8 +211,8 @@ jobs:
           New-Item -ItemType Directory -Force staging | Out-Null
           $version = (Get-Content VERSION -Raw).Trim()
           $installer = Get-Item "bin/PSNWDL-${{ matrix.arch }}-installer.exe"
-          Copy-Item $installer.FullName "staging/PSNWDL-$version-windows-${{ matrix.release_arch }}-installer.exe"
-          Compress-Archive -Path bin/PSNWDL.exe, LICENSE -DestinationPath "staging/PSNWDL-$version-windows-${{ matrix.release_arch }}-portable.zip"
+          Copy-Item $installer.FullName "staging/psnwdl-$version-windows-${{ matrix.release_arch }}-installer.exe"
+          Compress-Archive -Path bin/PSNWDL.exe, LICENSE -DestinationPath "staging/psnwdl-$version-windows-${{ matrix.release_arch }}-portable.zip"
       - name: Build Linux packages
         if: matrix.os == 'linux'
         shell: bash
@@ -236,7 +236,7 @@ jobs:
           cp build/linux/PSNWDL.desktop "$archive_root/PSNWDL.desktop"
           cp build/appicon.png "$archive_root/PSNWDL.png"
           cp LICENSE "$archive_root/LICENSE"
-          tar -C archive -czf "staging/PSNWDL-$version-linux-${{ matrix.release_arch }}-portable.tar.gz" "PSNWDL-$version"
+          tar -C archive -czf "staging/psnwdl-$version-linux-${{ matrix.release_arch }}-portable.tar.gz" "PSNWDL-$version"
 
           docker build \
             --build-arg NFPM_VERSION='${{ env.NFPM_VERSION }}' \
@@ -259,10 +259,10 @@ jobs:
           wails3 task darwin:package:dmg ARCH=${{ matrix.arch }}
           mkdir -p staging
           version=$(tr -d '[:space:]' < VERSION)
-          mv bin/PSNWDL.dmg "staging/PSNWDL-$version-macos-${{ matrix.release_arch }}.dmg"
+          mv bin/PSNWDL.dmg "staging/psnwdl-$version-macos-${{ matrix.release_arch }}.dmg"
           ditto -c -k --sequesterRsrc --keepParent \
             bin/PSNWDL.app \
-            "staging/PSNWDL-$version-macos-${{ matrix.release_arch }}-portable.zip"
+            "staging/psnwdl-$version-macos-${{ matrix.release_arch }}-portable.zip"
       - name: Upload package artifacts
         uses: actions/upload-artifact@v7
         with:
