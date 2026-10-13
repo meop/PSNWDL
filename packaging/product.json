@@ -1,0 +1,12 @@
+{
+  "product": "PSNWDL",
+  "id": "psnwdl",
+  "repository": "meop/PSNWDL",
+  "description": "Browse, download and manage official PlayStation game updates and firmware, with RPCS3 library integration.",
+  "portableAsset": "psnwdl-{version}-windows-{arch}-portable.zip",
+  "installerAsset": "psnwdl-{version}-windows-{arch}-installer.exe",
+  "executable": "PSNWDL.exe",
+  "chocolateyMode": "portable",
+  "minimumWindowsVersion": null,
+  "webview2": true
+}

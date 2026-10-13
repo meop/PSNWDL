@@ -20,6 +20,15 @@ Downloadable packages are produced for Windows, Linux, and macOS on both x64
 and ARM64 from the
 [GitHub Releases page](https://github.com/meop/PSNWDL/releases).
 
+On Windows, install with [Scoop](https://scoop.sh) using the publisher's bucket:
+
+```powershell
+scoop bucket add meop https://github.com/meop/scoop-bucket
+scoop install meop/psnwdl
+```
+
+The Scoop package supports x64 and ARM64 and requires Microsoft's WebView2 Runtime.
+
 ---
 
 ## Features

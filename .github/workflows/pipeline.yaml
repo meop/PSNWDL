@@ -336,3 +336,14 @@ jobs:
           files: artifacts/*
           draft: false
           prerelease: ${{ needs.version.outputs.prerelease }}
+
+  distribution:
+    name: Distribution packages
+    needs: [version, release]
+    if: github.ref == 'refs/heads/master' && needs.version.outputs.changed == 'true' && needs.version.outputs.prerelease == 'false'
+    uses: ./.github/workflows/distribution.yaml
+    with:
+      version: ${{ needs.version.outputs.new_version }}
+    secrets:
+      CHOCOLATEY_API_KEY: ${{ secrets.CHOCOLATEY_API_KEY }}
+      SCOOP_BUCKET_SSH_KEY: ${{ secrets.SCOOP_BUCKET_SSH_KEY }}
