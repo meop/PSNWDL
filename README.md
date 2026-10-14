@@ -15,6 +15,8 @@ RPCS3 `dev_hdd0/game` tree — but the PKGs themselves are unmodified.
 > Sony's update endpoints are public; redistribution of downloaded packages is
 > not. This tool is for personal archival / emulator setup.
 
+## Installation
+
 The current application version is recorded in [`VERSION`](VERSION).
 Downloadable packages are produced for Windows, Linux, and macOS on both x64
 and ARM64 from the
@@ -28,6 +30,26 @@ scoop install meop/psnwdl
 ```
 
 The Scoop package supports x64 and ARM64 and requires Microsoft's WebView2 Runtime.
+
+To update it:
+
+```powershell
+scoop update
+scoop update psnwdl
+```
+
+The [Chocolatey package](https://community.chocolatey.org/packages/psnwdl) has
+been submitted for moderation. Once approved, install or update it with:
+
+```powershell
+choco install psnwdl
+choco upgrade psnwdl
+```
+
+Chocolatey installs the portable release for x64 or ARM64 and declares WebView2
+as a dependency. Scoop and Chocolatey updates are published automatically after
+stable releases created by this project's GitHub Actions pipeline. Chocolatey
+versions must pass its review process before becoming available on the normal feed.
 
 ---
 
