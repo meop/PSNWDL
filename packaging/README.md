@@ -18,6 +18,9 @@ reusable publisher to update this app immediately after release. The configured
 SCOOP_BUCKET_SSH_KEY secret has write access only to the bucket; no personal token
 is needed. The distribution workflow can also publish an existing release manually.
 The generated manifest here remains a reviewable artifact.
+New PSNWDL releases use `psnwdl-{version}-windows-{arch}.zip`; both generators
+also accept the original `-portable.zip` names when refreshing older releases.
+Scoop autoupdate points to the new naming scheme for subsequent releases.
 Public Games/Extras inclusion is deferred until established usage or an accepted
 exception. Keep the same package names during any migration.
 

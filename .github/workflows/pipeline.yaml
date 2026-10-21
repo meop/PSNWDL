@@ -2,6 +2,7 @@
 name: Pipeline
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - '**'
@@ -123,7 +124,7 @@ jobs:
   build:
     name: Build ${{ matrix.name }}
     needs: [version, validate]
-    if: github.ref == 'refs/heads/master' && needs.version.outputs.changed == 'true'
+    if: github.event_name == 'workflow_dispatch' || (github.ref == 'refs/heads/master' && needs.version.outputs.changed == 'true')
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
@@ -143,17 +144,17 @@ jobs:
             runner: ubuntu-24.04
             os: linux
             arch: amd64
-            release_arch: x86_64
+            release_arch: x64
           - name: Linux ARM64
             runner: ubuntu-24.04-arm
             os: linux
             arch: arm64
-            release_arch: aarch64
+            release_arch: arm64
           - name: macOS Intel
             runner: macos-15-intel
             os: darwin
             arch: amd64
-            release_arch: x86_64
+            release_arch: x64
           - name: macOS Apple Silicon
             runner: macos-15
             os: darwin
@@ -181,7 +182,7 @@ jobs:
         if: matrix.os == 'linux'
         run: |
           sudo apt-get update
-          sudo apt-get install --yes build-essential pkg-config libgtk-4-dev libwebkitgtk-6.0-dev
+          sudo apt-get install --yes build-essential pkg-config libgtk-4-dev libwebkitgtk-6.0-dev desktop-file-utils xvfb
       - name: Install NSIS
         if: matrix.os == 'windows'
         shell: pwsh
@@ -211,8 +212,8 @@ jobs:
           New-Item -ItemType Directory -Force staging | Out-Null
           $version = (Get-Content VERSION -Raw).Trim()
           $installer = Get-Item "bin/PSNWDL-${{ matrix.arch }}-installer.exe"
-          Copy-Item $installer.FullName "staging/psnwdl-$version-windows-${{ matrix.release_arch }}-installer.exe"
-          Compress-Archive -Path bin/PSNWDL.exe, LICENSE -DestinationPath "staging/psnwdl-$version-windows-${{ matrix.release_arch }}-portable.zip"
+          Copy-Item $installer.FullName "staging/psnwdl-$version-windows-${{ matrix.release_arch }}-setup.exe"
+          Compress-Archive -Path bin/PSNWDL.exe, LICENSE -DestinationPath "staging/psnwdl-$version-windows-${{ matrix.release_arch }}.zip"
       - name: Build Linux packages
         if: matrix.os == 'linux'
         shell: bash
@@ -236,7 +237,8 @@ jobs:
           cp build/linux/PSNWDL.desktop "$archive_root/PSNWDL.desktop"
           cp build/appicon.png "$archive_root/PSNWDL.png"
           cp LICENSE "$archive_root/LICENSE"
-          tar -C archive -czf "staging/psnwdl-$version-linux-${{ matrix.release_arch }}-portable.tar.gz" "PSNWDL-$version"
+          tar -C archive -czf "staging/psnwdl-$version-linux-${{ matrix.release_arch }}.tar.gz" "PSNWDL-$version"
+          bash scripts/New-AppImage.sh
 
           docker build \
             --build-arg NFPM_VERSION='${{ env.NFPM_VERSION }}' \
@@ -262,7 +264,34 @@ jobs:
           mv bin/PSNWDL.dmg "staging/psnwdl-$version-macos-${{ matrix.release_arch }}.dmg"
           ditto -c -k --sequesterRsrc --keepParent \
             bin/PSNWDL.app \
-            "staging/psnwdl-$version-macos-${{ matrix.release_arch }}-portable.zip"
+            "staging/psnwdl-$version-macos-${{ matrix.release_arch }}.zip"
+      - name: Verify Linux AppImage contents and launch
+        if: matrix.os == 'linux'
+        shell: bash
+        run: |
+          version=$(tr -d '[:space:]' < VERSION)
+          image="$PWD/staging/psnwdl-$version-linux-${{ matrix.release_arch }}.AppImage"
+          mkdir appimage-check
+          cd appimage-check
+          "$image" --appimage-extract
+          test -x squashfs-root/AppRun
+          cmp ../bin/PSNWDL squashfs-root/usr/bin/PSNWDL
+          cmp ../LICENSE squashfs-root/usr/share/licenses/psnwdl/LICENSE
+          if find squashfs-root -name '*.so*' | grep -q .; then
+            echo 'AppImage must not bundle shared libraries.' >&2
+            exit 1
+          fi
+          ldd squashfs-root/usr/bin/PSNWDL | tee linked-libraries.txt
+          if grep -q 'not found' linked-libraries.txt; then exit 1; fi
+          set +e
+          timeout 20s xvfb-run --auto-servernum "$image" --appimage-extract-and-run >launch.log 2>&1
+          status=$?
+          set -e
+          cat launch.log
+          if [[ "$status" != 124 ]]; then
+            echo "AppImage exited before the smoke-test timeout (status $status)." >&2
+            exit 1
+          fi
       - name: Upload package artifacts
         uses: actions/upload-artifact@v7
         with:
@@ -273,7 +302,7 @@ jobs:
   release:
     name: Release
     needs: [version, build]
-    if: github.ref == 'refs/heads/master' && needs.version.outputs.changed == 'true'
+    if: github.event_name != 'workflow_dispatch' && github.ref == 'refs/heads/master' && needs.version.outputs.changed == 'true'
     permissions:
       contents: write
     runs-on: ubuntu-latest

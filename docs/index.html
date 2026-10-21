@@ -27,7 +27,7 @@
     <article><h2>Keep a local library</h2><p>Queue downloads, inspect progress and activity, and organize cached firmware and title updates by console.</p></article>
     <article><h2>Work with RPCS3</h2><p>Scan a configured RPCS3 library, synchronize PS3 update downloads, and explicitly install updates into the emulator library.</p></article>
   </section>
-  <section id="install"><h2>Install and update</h2><p><a href="https://github.com/meop/PSNWDL/releases/latest">GitHub releases</a> include packages for Windows, Linux and macOS on x64 and ARM64. Windows packages require Microsoft Edge WebView2 Runtime.</p>
+  <section id="install"><h2>Install and update</h2><p><a href="https://github.com/meop/PSNWDL/releases/latest">GitHub releases</a> include packages for Windows, Linux and macOS on x64 and ARM64. All formats use the system webview: Microsoft Edge WebView2 on Windows, built-in WebKit on macOS, and GTK4/WebKitGTK 6.0 on Linux.</p><p>Archives and AppImages still require those system libraries; they do not bundle a browser engine. The Windows installer installs WebView2 if missing, and native Linux packages declare their dependencies. See <a href="https://github.com/meop/PSNWDL#runtime-prerequisites">runtime prerequisites</a> for installation commands. AppImage packaging is configured for subsequent releases; existing release assets keep their original names.</p>
     <h3>Scoop on Windows</h3><pre><code>scoop bucket add meop https://github.com/meop/scoop-bucket
 scoop install meop/psnwdl
 scoop update psnwdl</code></pre>

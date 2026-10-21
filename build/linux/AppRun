@@ -1,0 +1,5 @@
+#!/bin/sh
+# Keep the host's library paths and WebKit helper discovery unchanged.
+set -eu
+appdir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+exec "$appdir/usr/bin/PSNWDL" "$@"

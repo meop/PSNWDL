@@ -14,8 +14,8 @@ if ($Version -notmatch '^\d+\.\d+\.\d+(?:-[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?(?:
 }
 
 $artifactsPath = (Resolve-Path -LiteralPath $ArtifactsDirectory).Path
-$x8664Name = "psnwdl-$Version-linux-x86_64-portable.tar.gz"
-$aarch64Name = "psnwdl-$Version-linux-aarch64-portable.tar.gz"
+$x8664Name = "psnwdl-$Version-linux-x64.tar.gz"
+$aarch64Name = "psnwdl-$Version-linux-arm64.tar.gz"
 $x8664Path = Join-Path $artifactsPath $x8664Name
 $aarch64Path = Join-Path $artifactsPath $aarch64Name
 

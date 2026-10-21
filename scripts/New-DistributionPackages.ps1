@@ -31,6 +31,11 @@ function Get-Asset {
   param([string]$Pattern, [string]$Architecture)
   $name = $Pattern.Replace('{version}', $Version).Replace('{arch}', $Architecture)
   $matches = @($release.assets | Where-Object name -CEQ $name)
+  # Existing releases keep their original URLs; new releases use the shorter names.
+  if ($matches.Count -eq 0 -and $Pattern -eq $config.portableAsset -and $config.PSObject.Properties['legacyPortableAsset']) {
+    $name = $config.legacyPortableAsset.Replace('{version}', $Version).Replace('{arch}', $Architecture)
+    $matches = @($release.assets | Where-Object name -CEQ $name)
+  }
   if ($matches.Count -ne 1) { throw "Expected exactly one release asset: $name" }
   $asset = $matches[0]
   $path = Join-Path $AssetsDirectory $name

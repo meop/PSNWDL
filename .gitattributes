@@ -1,0 +1,2 @@
+*.sh text eol=lf
+build/linux/AppRun text eol=lf
