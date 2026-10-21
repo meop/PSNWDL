@@ -32,6 +32,11 @@ The [revision page](https://community.chocolatey.org/packages/psnwdl/0.1.1.20261
 displays the actual app icon and is pending automated review. Original 0.1.1
 remains approved. The revision does not change the downloaded binaries.
 
+The publisher's three screenshots are in `docs/images`, shared by the README,
+GitHub Pages site and the Chocolatey description. The pending metadata revision
+is updated with those three inline images and matching captions; app assets,
+checksums and package version are unchanged. Re-upload restarts automated checks.
+
 ## Scan note
 
 The October 13 VirusTotal report for the official x64 ZIP (SHA256

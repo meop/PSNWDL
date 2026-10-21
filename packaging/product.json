@@ -10,5 +10,19 @@
   "executable": "PSNWDL.exe",
   "chocolateyMode": "portable",
   "minimumWindowsVersion": null,
-  "webview2": true
+  "webview2": true,
+  "screenshots": [
+    {
+      "url": "https://meop.github.io/PSNWDL/images/title-search.png",
+      "caption": "Search official PlayStation title updates and inspect available versions, sizes and download actions."
+    },
+    {
+      "url": "https://meop.github.io/PSNWDL/images/library.png",
+      "caption": "Browse locally cached firmware and title updates alongside the activity and emulator panes."
+    },
+    {
+      "url": "https://meop.github.io/PSNWDL/images/settings.png",
+      "caption": "Configure interface defaults, parallel downloads, retries and network settings."
+    }
+  ]
 }

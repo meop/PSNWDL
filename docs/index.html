@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>PSNWDL — PlayStation updates and firmware</title>
+  <meta name="description" content="A free, open-source desktop app for official PlayStation updates and firmware, with RPCS3 library integration.">
+  <link rel="stylesheet" href="site.css">
+</head>
+<body>
+<header><a class="brand" href="index.html">PSNWDL</a><nav><a href="#screenshots">Screenshots</a><a href="https://github.com/meop/PSNWDL#readme">Documentation</a><a href="https://github.com/meop/PSNWDL/issues">Support</a><a href="https://github.com/meop/PSNWDL">Source</a></nav></header>
+<main>
+  <p class="eyebrow">Free · Open source · Windows, Linux and macOS</p>
+  <h1>PlayStation updates,<br>ready for your library.</h1>
+  <p class="lead">Find official title updates and firmware, keep a local download library, and manage PS3 updates for RPCS3 in one desktop workbench.</p>
+  <p><a class="button" href="https://github.com/meop/PSNWDL/releases/latest">Download PSNWDL</a></p>
+  <section id="screenshots" aria-labelledby="screenshots-heading">
+    <h2 id="screenshots-heading">See PSNWDL in action</h2>
+    <figure><a href="images/title-search.png"><img src="images/title-search.png" width="2538" height="1430" alt="PS3 title-update results with versions, package sizes and Download actions, alongside the activity log."></a><figcaption>Search official PlayStation title updates and inspect available versions, sizes and download actions.</figcaption></figure>
+    <div class="screenshot-grid">
+      <figure><a href="images/library.png"><img src="images/library.png" width="2538" height="1430" loading="lazy" alt="The local PS3 firmware and title-update library in PSNWDL's four-pane workbench."></a><figcaption>Browse locally cached firmware and title updates alongside the activity and emulator panes.</figcaption></figure>
+      <figure><a href="images/settings.png"><img src="images/settings.png" width="2538" height="1430" loading="lazy" alt="PSNWDL settings for theme, console mode, download defaults, concurrency and retries."></a><figcaption>Configure interface defaults, parallel downloads, retries and network settings.</figcaption></figure>
+    </div>
+  </section>
+  <section class="grid">
+    <article><h2>Find official packages</h2><p>Search PS3, PS4 and PS Vita title updates, and browse firmware for PS3, PS4, PS Vita and PS5. PS5 title-update lookup is not supported.</p></article>
+    <article><h2>Keep a local library</h2><p>Queue downloads, inspect progress and activity, and organize cached firmware and title updates by console.</p></article>
+    <article><h2>Work with RPCS3</h2><p>Scan a configured RPCS3 library, synchronize PS3 update downloads, and explicitly install updates into the emulator library.</p></article>
+  </section>
+  <section id="install"><h2>Install and update</h2><p><a href="https://github.com/meop/PSNWDL/releases/latest">GitHub releases</a> include packages for Windows, Linux and macOS on x64 and ARM64. Windows packages require Microsoft Edge WebView2 Runtime.</p>
+    <h3>Scoop on Windows</h3><pre><code>scoop bucket add meop https://github.com/meop/scoop-bucket
+scoop install meop/psnwdl
+scoop update psnwdl</code></pre>
+    <h3>Chocolatey on Windows</h3><pre><code>choco install psnwdl
+choco upgrade psnwdl</code></pre><p>The original <a href="https://community.chocolatey.org/packages/psnwdl/0.1.1">Chocolatey package is approved</a>. Package metadata revisions go through separate review.</p>
+  </section>
+  <section><h2>Documentation and support</h2><p>Read the <a href="https://github.com/meop/PSNWDL#readme">project documentation</a> for configuration and platform requirements. Report problems or ask for volunteer help through <a href="https://github.com/meop/PSNWDL/issues">GitHub Issues</a>.</p><p>Use only with titles and firmware you legitimately own. PSNWDL is an independent project and is not affiliated with Sony or RPCS3. Downloads and installation are separate, explicit actions.</p></section>
+</main>
+<footer><span>PSNWDL by meop · MIT license</span><a href="https://github.com/meop/PSNWDL/blob/master/LICENSE">License</a><a href="https://github.com/meop/PSNWDL/issues">Get help</a></footer>
+</body>
+</html>

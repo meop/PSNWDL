@@ -15,6 +15,22 @@ RPCS3 `dev_hdd0/game` tree — but the PKGs themselves are unmodified.
 > Sony's update endpoints are public; redistribution of downloaded packages is
 > not. This tool is for personal archival / emulator setup.
 
+## Screenshots
+
+Search official PlayStation title updates and inspect available versions, sizes and download actions.
+
+![PSNWDL title-update search results](docs/images/title-search.png)
+
+Browse locally cached firmware and title updates alongside the activity and emulator panes.
+
+![PSNWDL local library and workbench](docs/images/library.png)
+
+Configure interface defaults, parallel downloads, retries and network settings.
+
+![PSNWDL settings](docs/images/settings.png)
+
+[Project website and screenshot gallery](https://meop.github.io/PSNWDL/).
+
 ## Installation
 
 The current application version is recorded in [`VERSION`](VERSION).
