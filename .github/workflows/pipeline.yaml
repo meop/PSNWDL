@@ -144,17 +144,17 @@ jobs:
             runner: ubuntu-24.04
             os: linux
             arch: amd64
-            release_arch: x64
+            release_arch: x86_64
           - name: Linux ARM64
             runner: ubuntu-24.04-arm
             os: linux
             arch: arm64
-            release_arch: arm64
+            release_arch: aarch64
           - name: macOS Intel
             runner: macos-15-intel
             os: darwin
             arch: amd64
-            release_arch: x64
+            release_arch: x86_64
           - name: macOS Apple Silicon
             runner: macos-15
             os: darwin
@@ -375,7 +375,8 @@ jobs:
             | Linux | GTK4 and WebKitGTK 6.0. Native packages declare dependencies; archives and AppImages require them already installed. |
 
             On Ubuntu 24.04 / Debian 13: `sudo apt install libgtk-4-1 libwebkitgtk-6.0-4`.
-            Choose `x64` or `arm64` for your processor. AppImages are for glibc Linux;
+            Windows uses `x64`/`arm64`, Linux archives and AppImages use `x86_64`/`aarch64`,
+            and macOS uses `x86_64`/`arm64`. AppImages are for glibc Linux;
             Alpine users should use the musl-native APK. Run an AppImage with
             `chmod +x <file>.AppImage` followed by `./<file>.AppImage`;
             use `--appimage-extract-and-run` if FUSE is unavailable.

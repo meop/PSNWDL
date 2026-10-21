@@ -6,12 +6,12 @@ cd "$(dirname "$0")/.."
 
 case "$(uname -m)" in
   x86_64)
-    arch=x86_64; release_arch=x64
+    arch=x86_64
     tool_sha=ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0
     runtime_sha=2fca8b443c92510f1483a883f60061ad09b46b978b2631c807cd873a47ec260d
     ;;
   aarch64)
-    arch=aarch64; release_arch=arm64
+    arch=aarch64
     tool_sha=f0837e7448a0c1e4e650a93bb3e85802546e60654ef287576f46c71c126a9158
     runtime_sha=00cbdfcf917cc6c0ff6d3347d59e0ca1f7f45a6df1a428a0d6d8a78664d87444
     ;;
@@ -38,4 +38,4 @@ install -m755 build/linux/AppRun "$appdir/AppRun"
 desktop-file-validate "$appdir/PSNWDL.desktop"
 ARCH="$arch" APPIMAGE_EXTRACT_AND_RUN=1 "$work/appimagetool" \
   --no-appstream --runtime-file "$work/runtime" "$appdir" \
-  "staging/psnwdl-$version-linux-$release_arch.AppImage"
+  "staging/psnwdl-$version-linux-$arch.AppImage"
