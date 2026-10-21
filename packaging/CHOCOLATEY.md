@@ -26,6 +26,12 @@ chocolatey_version input affects only the nuspec, not app VERSION, release URLs,
 checksums, or Scoop version. Icon URLs use commit-pinned jsDelivr PNGs verified
 against the repository images.
 
+Revision 0.1.1.20261020 was submitted successfully October 20, 2026 through
+[Distribution](https://github.com/meop/PSNWDL/actions/runs/39537676363).
+The [revision page](https://community.chocolatey.org/packages/psnwdl/0.1.1.20261020)
+displays the actual app icon and is pending automated review. Original 0.1.1
+remains approved. The revision does not change the downloaded binaries.
+
 ## Scan note
 
 The October 13 VirusTotal report for the official x64 ZIP (SHA256
