@@ -81,6 +81,12 @@ $toolsDir = Join-Path $chocoDir 'tools'
 New-Item -ItemType Directory -Force -Path $toolsDir | Out-Null
 $dependencies = if ($config.webview2) { '<dependencies><dependency id="webview2-runtime" /></dependencies>' } else { '' }
 $description = [Security.SecurityElement]::Escape($config.description)
+$chocolateyDescription = if ($config.PSObject.Properties['chocolateyDescription']) {
+  [Security.SecurityElement]::Escape($config.chocolateyDescription)
+} else { $description }
+$copyrightLine = @(Get-Content (Join-Path $repoRoot 'LICENSE') | Where-Object { $_ -match '^Copyright ' })
+if ($copyrightLine.Count -ne 1) { throw 'Expected one copyright line in LICENSE.' }
+$copyright = [Security.SecurityElement]::Escape($copyrightLine[0])
 $nuspec = @"
 <?xml version="1.0" encoding="utf-8"?>
 <package xmlns="http://schemas.microsoft.com/packaging/2015/06/nuspec.xsd">
@@ -90,11 +96,12 @@ $nuspec = @"
     <title>$($config.product)</title>
     <authors>Marshall Porter</authors>
     <owners>meop</owners>
+    <copyright>$copyright</copyright>
     <projectUrl>https://github.com/$($config.repository)</projectUrl>
     <packageSourceUrl>https://github.com/$($config.repository)/tree/HEAD/packaging</packageSourceUrl>
     <licenseUrl>https://github.com/$($config.repository)/blob/HEAD/LICENSE</licenseUrl>
     <requireLicenseAcceptance>false</requireLicenseAcceptance>
-    <description>$description</description>
+    <description>$chocolateyDescription</description>
     <summary>$description</summary>
     <tags>$($config.id) desktop windows</tags>
     <releaseNotes>https://github.com/$($config.repository)/releases/tag/v$Version</releaseNotes>

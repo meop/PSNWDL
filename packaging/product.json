@@ -3,6 +3,7 @@
   "id": "psnwdl",
   "repository": "meop/PSNWDL",
   "description": "Browse, download and manage official PlayStation game updates and firmware, with RPCS3 library integration.",
+  "chocolateyDescription": "PSNWDL browses and caches official PlayStation game updates and firmware for PS3, PS4, PS Vita and PS5. Search by title ID, inspect available update versions, manage downloads and browse current firmware. RPCS3 integration supports library scanning and installing PS3 updates into a selected emulator library. Downloaded packages are cached locally. The Windows portable application supports x64 and ARM64 and requires Microsoft Edge WebView2 Runtime, installed through the package dependency. Use with games and firmware you legitimately own; PSNWDL does not patch packages or bypass DRM.",
   "portableAsset": "psnwdl-{version}-windows-{arch}-portable.zip",
   "installerAsset": "psnwdl-{version}-windows-{arch}-installer.exe",
   "executable": "PSNWDL.exe",

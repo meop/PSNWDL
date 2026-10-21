@@ -38,8 +38,8 @@ scoop update
 scoop update psnwdl
 ```
 
-The [Chocolatey package](https://community.chocolatey.org/packages/psnwdl) has
-been submitted for moderation. Once approved, install or update it with:
+The [Chocolatey package](https://community.chocolatey.org/packages/psnwdl) is
+approved. Install or update it with:
 
 ```powershell
 choco install psnwdl
