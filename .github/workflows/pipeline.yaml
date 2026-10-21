@@ -361,7 +361,25 @@ jobs:
         uses: softprops/action-gh-release@v3
         with:
           tag_name: v${{ needs.version.outputs.new_version }}
-          body: ${{ steps.changelog.outputs.changelog }}
+          body: |
+            ${{ steps.changelog.outputs.changelog }}
+
+            ### Runtime requirements
+
+            All formats use the system webview; no download bundles a private browser engine.
+
+            | Platform | Required runtime |
+            |---|---|
+            | Windows | Microsoft Edge WebView2. The setup EXE installs it if missing; ZIP users need it installed. |
+            | macOS | Built-in system WebKit. |
+            | Linux | GTK4 and WebKitGTK 6.0. Native packages declare dependencies; archives and AppImages require them already installed. |
+
+            On Ubuntu 24.04 / Debian 13: `sudo apt install libgtk-4-1 libwebkitgtk-6.0-4`.
+            Choose `x64` or `arm64` for your processor. AppImages are for glibc Linux;
+            Alpine users should use the musl-native APK. Run an AppImage with
+            `chmod +x <file>.AppImage` followed by `./<file>.AppImage`;
+            use `--appimage-extract-and-run` if FUSE is unavailable.
+            See the [runtime prerequisites](https://github.com/meop/PSNWDL#runtime-prerequisites).
           files: artifacts/*
           draft: false
           prerelease: ${{ needs.version.outputs.prerelease }}
