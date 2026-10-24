@@ -84,6 +84,21 @@ Open, needs hardware that is not the x64 development box.
 - **True cross-version upgrades.** Only forced same-version reinstalls have been
   tested. Not actionable until a second release exists.
 
-Record results per channel, and do not treat a non-interactive session result as
-a pass or a failure of the application: GUI apps may fail to initialize there for
-reasons unrelated to the build.
+Record results per channel. A non-interactive session result is neither a pass
+nor a failure of the application: GUI apps may fail to initialize there for
+reasons unrelated to the build, so launch from a desktop session.
+
+### State of the ARM64 machine, checked October 24, 2026
+
+Useful for planning, so a trip there is not wasted:
+
+- PSNWDL is **not installed** and the repo is **not cloned**; clone it if you
+  want to build rather than install a published package.
+- Scoop is present with only the `main` and `nerd-fonts` buckets, so the meop
+  bucket is **not** added — a genuinely clean install test is available:
+  `scoop bucket add meop https://github.com/meop/scoop-bucket` then
+  `scoop install meop/psnwdl`, launch, confirm a responding window, then
+  `scoop uninstall psnwdl` and remove the bucket to restore the machine.
+- WebView2 runtime **is already installed** (156.0.4314.42), so the
+  `webview2-runtime` dependency install **cannot** be exercised there either.
+  That one still needs a fresh VM or a machine without Edge WebView2.
