@@ -68,3 +68,22 @@ Published is not the same as exercised. These gaps are known and open:
 - Installation on a clean machine without prerequisites. The Chocolatey smoke
   test passed `--ignore-dependencies` because the host already had WebView2, so
   installing `webview2-runtime` as a declared dependency has never run.
+
+## TODO: ARM64 and clean-machine runtime checks
+
+Open, needs hardware that is not the x64 development box.
+
+- **ARM64 native runtime**, per channel. Package contents and asset hashes are
+  verified by the generators; nothing has launched an ARM64 binary from an
+  installed package. Install from the meop Scoop bucket and from the Chocolatey
+  package on ARM64, launch, and confirm a responding window.
+- **WebView2 dependency install.** The Chocolatey smoke test passed
+  `--ignore-dependencies` because the host already had WebView2, so installing
+  `webview2-runtime` as a declared dependency has never run. Needs a machine
+  without it, or a fresh VM.
+- **True cross-version upgrades.** Only forced same-version reinstalls have been
+  tested. Not actionable until a second release exists.
+
+Record results per channel, and do not treat a non-interactive session result as
+a pass or a failure of the application: GUI apps may fail to initialize there for
+reasons unrelated to the build.
