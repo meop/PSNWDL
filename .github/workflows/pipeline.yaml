@@ -238,7 +238,7 @@ jobs:
           cp build/appicon.png "$archive_root/PSNWDL.png"
           cp LICENSE "$archive_root/LICENSE"
           tar -C archive -czf "staging/psnwdl-$version-linux-${{ matrix.release_arch }}.tar.gz" "PSNWDL-$version"
-          bash scripts/New-AppImage.sh
+          pwsh ./scripts/New-AppImage.ps1
 
           docker build \
             --build-arg NFPM_VERSION='${{ env.NFPM_VERSION }}' \
