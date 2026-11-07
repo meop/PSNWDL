@@ -28,7 +28,15 @@ foreach ($path in @($x8664Path, $aarch64Path)) {
 $x8664Sha256 = (Get-FileHash -LiteralPath $x8664Path -Algorithm SHA256).Hash.ToLowerInvariant()
 $aarch64Sha256 = (Get-FileHash -LiteralPath $aarch64Path -Algorithm SHA256).Hash.ToLowerInvariant()
 $releaseBase = "https://github.com/meop/PSNWDL/releases/download/v$Version"
-$packageVersion = $Version.Replace('-', '_')
+# pkgver cannot contain '-'. pacman sorts 1.0_rc1 after 1.0 but 1.0rc1 before it, so a prerelease drops its hyphen,
+# as Arch's own packages do (7.4rc1, 160.0rc1). A prerelease starting with a digit has no such form: 1.0-1 would
+# become 1.01, newer than 1.0.
+$null = $Version -match '^(?<core>\d+\.\d+\.\d+)(?:-(?<pre>[^+]+))?(?<build>\+.+)?$'
+$core, $prerelease, $build = $Matches.core, $Matches.pre, $Matches.build
+if ($prerelease -and $prerelease -notmatch '^[A-Za-z]') {
+    throw "An AUR pkgver cannot sort prerelease '$prerelease' before its release; start it with a letter."
+}
+$packageVersion = $core + "$prerelease$build".Replace('-', '.')
 
 $pkgbuild = @'
 # Maintainer: Marshall Porter <meoporter@gmail.com>

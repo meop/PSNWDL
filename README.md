@@ -287,7 +287,7 @@ launch it under Xvfb using the system libraries.
 
 Package managers adapt semantic prereleases to their own ordering syntax. For
 `0.1.1-rc.3`, the complete version/release portion is `0.1.1~rc.3-1` inside
-DEB/RPM metadata, `0.1.1rc.3-1` for Arch, and `0.1.1_rc.3-r1` for Alpine.
+DEB/RPM metadata, `0.1.1rc.3-1` for Arch and the AUR recipe, and `0.1.1_rc.3-r1` for Alpine.
 GitHub rewrites the `~` in uploaded asset names to `.`, so the release workflow
 performs that normalization before generating `SHA256SUMS`; the DEB/RPM package
 metadata retains the native `~` version ordering.
