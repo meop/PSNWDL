@@ -103,10 +103,19 @@
     if (firstEmulatorLoad) await refreshEmulator(true)
   })
 
+  // The RPCS3 paths the Emulator list was last loaded from. A Library folder
+  // change needs nothing here: the backend rescans and emits downloads:updated.
+  let loadedEmulatorPaths = ''
+
   $effect(() => {
     if (!emulatorState.initialized) return
     hydrateEmulatorConfig(appConfig)
     void refreshPendingPKGs()
+    // games.yml lists the titles and dev_hdd0/game holds their installed
+    // versions, so a change to either reloads the Emulator list.
+    const paths = `${appConfig.rpcs3.games_yml}\n${appConfig.rpcs3.hdd0_game}`
+    if (loadedEmulatorPaths && paths !== loadedEmulatorPaths) void refreshEmulator(true, true)
+    loadedEmulatorPaths = paths
   })
 
   $effect(() => {
@@ -324,8 +333,10 @@
     }
   }
 
-  async function refreshEmulator(initialLoad = false) {
-    if (emulatorRefreshing || (mode !== 'ps3' && !initialLoad)) return
+  // initialLoad loads outside PS3 mode; supersede replaces a load in progress
+  // (its results are discarded by generation) instead of being skipped.
+  async function refreshEmulator(initialLoad = false, supersede = false) {
+    if ((emulatorRefreshing && !supersede) || (mode !== 'ps3' && !initialLoad)) return
     if (isMissingGamesConfig()) {
       emulatorState.rows = []
       emulatorState.loadError = null
