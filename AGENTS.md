@@ -104,10 +104,13 @@ module root to regenerate the TS models/bindings, then rebuild.
    `games.yml` and local title state, asking the server only about titles new
    to the list. The full Emulator reconciliation (one PSN lookup per title)
    runs at startup and when a Settings change points `games.yml` or
-   `dev_hdd0/game` somewhere else. Download discovery runs only through
+   `dev_hdd0/game` somewhere else. The Emulator pane's Check button asks the
+   server again about the loaded titles, since no file watch can see Sony
+   publish an update; it does not reread local files, and rows keep their
+   state until their answer arrives. Download discovery runs only through
    Search. There is no Refresh control and no periodic polling; a pane that
-   needs one means a watched path is missing. Download and Install actions use
-   the already-loaded Emulator rows.
+   needs a refresh for local changes means a watched path is missing.
+   Download and Install actions use the already-loaded Emulator rows.
 
 10. **The queue is application-wide and has a header flyout.** Download and
     Emulator actions share one backend queue and one concurrency limit. The

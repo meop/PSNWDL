@@ -92,6 +92,7 @@ versions must pass its review process before becoming available on the normal fe
   names (the Library, `games.yml` and `dev_hdd0/game`). An edit to the
   settings file applies like a change in Settings, and changes made by RPCS3,
   a file manager or another tool show up in the panes without a refresh.
+  The Emulator pane's Check button asks the server again for new updates.
 - **Activity** — a log of every fetch, reconcile, download, verify, and extract,
   filterable by scope (`psn` / `jobs` / `library` / `pkg`).
 - **Light / dark / system theme** — applies live; persists in config.

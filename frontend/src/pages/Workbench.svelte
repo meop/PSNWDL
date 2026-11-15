@@ -72,6 +72,7 @@
   let showMissingInstalls = $state(false)
   let lastMode = $state<Mode>(initialMode)
   let emulatorRefreshing = $state(false)
+  let checkingServer = $state(false)
   let emulatorRefreshGeneration = 0
   let expandedLibraryTitles = $state<Record<string, boolean>>({})
   let downloadColumnWidths = $state([100, 90, 180, 80, 120])
@@ -406,6 +407,29 @@
     }
   }
 
+  // Check asks the server again about every loaded title: the one thing no
+  // file watch can see, such as an update Sony published since startup. The
+  // local files are already watched, so games.yml is not reread, and each row
+  // keeps its current state until its new answer arrives.
+  async function checkServer() {
+    if (!canCheckServer()) return
+    const generation = emulatorRefreshGeneration
+    checkingServer = true
+    emulatorError = null
+    try {
+      const entries = emulatorState.rows.map(
+        (row) => new rpcs3.Entry({ title_id: row.title_id, install_dir: row.install_dir })
+      )
+      await Promise.all(entries.map((entry) => reconcileEmulatorRow(entry, generation)))
+    } finally {
+      checkingServer = false
+    }
+  }
+
+  function canCheckServer(): boolean {
+    return !checkingServer && !emulatorRefreshing && !isMissingGamesConfig() && emulatorState.rows.length > 0
+  }
+
   // games.yml or dev_hdd0/game changed on disk. games.yml is reread, titles
   // already loaded keep their server state, only titles new to the list ask
   // the server, and every row's name and install folder are read again.
@@ -668,6 +692,7 @@
     return !syncingAll &&
       !emulatorSyncActive &&
       !emulatorRefreshing &&
+      !checkingServer &&
       !isMissingGamesConfig() &&
       !emulatorState.loadError &&
       emulatorState.rows.some(canSyncRow)
@@ -915,6 +940,14 @@
           </button>
           <button onclick={installAll} disabled={!canInstallAll()} class="btn btn-secondary">
             Install all
+          </button>
+          <button
+            onclick={checkServer}
+            disabled={!canCheckServer()}
+            class="btn btn-secondary w-24 justify-center"
+            title="Ask the server again for every title's updates"
+          >
+            {checkingServer ? 'Checking' : 'Check'}
           </button>
         </div>
       {/if}
