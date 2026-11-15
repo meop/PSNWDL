@@ -9,8 +9,8 @@ importers:
   .:
     dependencies:
       '@wailsio/runtime':
-        specifier: latest
-        version: 3.0.0-alpha2.117
+        specifier: 3.1.0
+        version: 3.1.0
     devDependencies:
       '@sveltejs/vite-plugin-svelte':
         specifier: ^7.1.2
@@ -292,8 +292,8 @@ packages:
   '@types/trusted-types@2.0.7':
     resolution: {integrity: sha512-ScaPdn1dQczgbl0QFTeTOmVHFULt394XJgOQNoyVhZ6r2vLnMLJfBPd53SB52T/3G36VI1/g2MZaX0cwDuXsfw==}
 
-  '@wailsio/runtime@3.0.0-alpha2.117':
-    resolution: {integrity: sha512-RZr6cncIXjdTbn2IqJ6AZXPm9WooaZEsNlNfaUH+Ru/YlH5sKDDeRdWpbcvsgoMLh4AJ+O8aBzZEiTYWDipGxw==}
+  '@wailsio/runtime@3.1.0':
+    resolution: {integrity: sha512-noEAedvRyO8TLCrqhGwzrp+mbMxAIDa2rYmdJQOzvJV9MxgaZeXAJGNBiMiKMTSSy4ESOtQi4VH/5heSzi6ZmA==}
 
   acorn@8.16.0:
     resolution: {integrity: sha512-UVJyE9MttOsBQIDKw1skb9nAwQuR5wuGD3+82K6JgJlm/Y+KI92oNsMNGZCYdDsVtRHSak0pcV5Dno5+4jh9sw==}
@@ -886,7 +886,7 @@ snapshots:
 
   '@types/trusted-types@2.0.7': {}
 
-  '@wailsio/runtime@3.0.0-alpha2.117': {}
+  '@wailsio/runtime@3.1.0': {}
 
   acorn@8.16.0: {}
 

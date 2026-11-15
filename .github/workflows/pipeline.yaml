@@ -22,7 +22,7 @@ env:
   NFPM_VERSION: 'v2.47.0'
   NODE_VERSION: '26.3.1'
   PNPM_VERSION: '11.18.0'
-  WAILS_VERSION: 'v3.0.0-alpha2.121'
+  WAILS_VERSION: 'v3.1.0'
 
 jobs:
   version:

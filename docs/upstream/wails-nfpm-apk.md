@@ -3,11 +3,12 @@
 - **Target repository:** `wailsapp/wails`
 - **Kind:** bug report or small enhancement
 - **Confidence:** High
-- **Status:** Draft; not filed. Recheck the latest Wails v3 release first.
+- **Status:** Draft; not filed. Still present in Wails v3.1.0 (rechecked
+  2026-11-14). Recheck the latest Wails v3 release first.
 
 ## Summary
 
-Wails v3.0.0-alpha2.121 registers nFPM's Alpine APK packager and defines an
+Wails v3.0.0-alpha2.121 (and still v3.1.0) registers nFPM's Alpine APK packager and defines an
 internal `APK` package type, but `wails3 tool package` rejects `-format apk`.
 The command accepts only `deb`, `rpm`, `archlinux`, and `dmg`.
 

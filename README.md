@@ -133,7 +133,7 @@ activity log, and RPCS3 reconcile/download/install flow.
 Install the Wails CLI once:
 
 ```sh
-go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-alpha2.121
+go install github.com/wailsapp/wails/v3/cmd/wails3@v3.1.0
 ```
 
 ### Runtime prerequisites

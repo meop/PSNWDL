@@ -7,7 +7,7 @@ FROM golang:1.26-alpine3.22 AS builder
 ARG PNPM_VERSION=11.18.0
 ARG NFPM_VERSION=v2.47.0
 ARG TARGETARCH
-ARG WAILS_VERSION=v3.0.0-alpha2.121
+ARG WAILS_VERSION=v3.1.0
 
 RUN apk add --no-cache \
       build-base \
