@@ -130,9 +130,65 @@ jobs:
         shell: bash
         run: git diff --exit-code
 
+  # The Go tests on every other platform PSNWDL ships for; Linux x64 runs them
+  # in Validate. Paths, home directories and RPCS3 locations differ by OS.
+  test:
+    name: Test ${{ matrix.name }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Windows x64
+            runner: windows-latest
+            os: windows
+          - name: Windows ARM64
+            runner: windows-11-arm
+            os: windows
+          - name: Linux ARM64
+            runner: ubuntu-24.04-arm
+            os: linux
+          - name: macOS Intel
+            runner: macos-15-intel
+            os: darwin
+          - name: macOS Apple Silicon
+            runner: macos-15
+            os: darwin
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          package_json_file: frontend/package.json
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+      - name: Install Linux build dependencies
+        if: matrix.os == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes build-essential pkg-config libgtk-4-dev libwebkitgtk-6.0-dev
+      # The app embeds frontend/dist, so the root package needs it to compile.
+      - name: Build frontend
+        working-directory: frontend
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm run build
+      - name: Run Go tests
+        run: go test ./...
+
   build:
     name: Build ${{ matrix.name }}
-    needs: [version, validate]
+    needs: [version, validate, test]
     if: github.event_name == 'workflow_dispatch' || (github.ref == 'refs/heads/master' && needs.version.outputs.changed == 'true')
     runs-on: ${{ matrix.runner }}
     strategy:
