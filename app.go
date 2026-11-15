@@ -178,6 +178,12 @@ func existingDirectory(path string) string {
 	}
 }
 
+// pathChanged reports whether next is a non-empty path different from current.
+func pathChanged(next, current string) bool {
+	next = strings.TrimSpace(next)
+	return next != "" && next != strings.TrimSpace(current)
+}
+
 func ensureConfigLibraryDir(cfg *config.Config) error {
 	if cfg == nil {
 		return nil
@@ -210,12 +216,15 @@ func (a *App) SaveConfig(next *config.Config) error {
 		}
 		next.Storage.LibraryDir = libraryDir
 	}
-	if strings.TrimSpace(next.RPCS3.GamesYML) != "" {
+	// Only paths that change are validated: a stored path that has since
+	// disappeared must not block saving an unrelated setting, or fixing the
+	// other path.
+	if pathChanged(next.RPCS3.GamesYML, a.cfg.RPCS3.GamesYML) {
 		if err := a.ValidateSettingsPath("games_yml", next.RPCS3.GamesYML); err != nil {
 			return err
 		}
 	}
-	if strings.TrimSpace(next.RPCS3.HDD0Game) != "" {
+	if pathChanged(next.RPCS3.HDD0Game, a.cfg.RPCS3.HDD0Game) {
 		if err := a.ValidateSettingsPath("hdd0_game", next.RPCS3.HDD0Game); err != nil {
 			return err
 		}

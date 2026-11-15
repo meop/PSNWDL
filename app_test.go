@@ -94,3 +94,21 @@ func TestPartitionSyncTargetsIgnoresTerminalJobStates(t *testing.T) {
 		}
 	}
 }
+
+func TestPathChangedIgnoresUnchangedStalePaths(t *testing.T) {
+	for _, tc := range []struct {
+		next, current string
+		want          bool
+	}{
+		{"", "", false},
+		{"", `C:\old\games.yml`, false},
+		{`C:\old\games.yml`, `C:\old\games.yml`, false},
+		{` C:\old\games.yml `, `C:\old\games.yml`, false},
+		{`C:\new\games.yml`, `C:\old\games.yml`, true},
+		{`C:\new\games.yml`, "", true},
+	} {
+		if got := pathChanged(tc.next, tc.current); got != tc.want {
+			t.Errorf("pathChanged(%q, %q) = %v, want %v", tc.next, tc.current, got, tc.want)
+		}
+	}
+}

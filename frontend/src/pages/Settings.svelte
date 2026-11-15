@@ -28,6 +28,7 @@
   let retries = $state(3)
   let timeoutSeconds = $state(15)
   let verifyTLS = $state(false)
+  let saveError = $state('')
 
   onMount(async () => {
     await hydrateSettings()
@@ -52,20 +53,35 @@
     timeoutSeconds = nextCfg.network.timeout_seconds
     verifyTLS = nextCfg.network.verify_tls
     detectedGamesYML = nextDetectedGamesYML
+    saveError = ''
     cfg = nextCfg
+
+    // Flag stored paths that no longer exist, so a stale value is visible
+    // instead of looking like a saved, working setting.
+    if (gamesYMLInput) gamesYMLError = await validatePath('games_yml', gamesYMLInput)
+    if (hdd0Input) hdd0Error = await validatePath('hdd0_game', hdd0Input)
   }
 
-  async function applyConfig(next: config.Config) {
-    await SaveConfig(next)
+  // applyConfig saves next and returns '' on success, or the error message.
+  async function applyConfig(next: config.Config): Promise<string> {
+    try {
+      await SaveConfig(next)
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e)
+      saveError = `Settings not saved: ${message}`
+      return message
+    }
+    saveError = ''
     cfg = next
     emulatorState.cfg = next
     emulatorState.gamesYMLInput = next.rpcs3.games_yml
     emulatorState.hdd0Input = next.rpcs3.hdd0_game
+    return ''
   }
 
   async function setUI<K extends keyof config.UI>(field: K, value: config.UI[K]) {
     if (!cfg) return
-    await applyConfig(new config.Config({ ...cfg, ui: { ...cfg.ui, [field]: value } }))
+    if (await applyConfig(new config.Config({ ...cfg, ui: { ...cfg.ui, [field]: value } }))) return
 
     if (field === 'theme') {
       theme.set(value as any)
@@ -84,13 +100,13 @@
     const newDir = libraryDirInput
     libraryDirError = await validatePath('library', newDir)
     if (libraryDirError) return
-    await applyConfig(
+    libraryDirError = await applyConfig(
       new config.Config({
         ...cfg,
         storage: { ...cfg.storage, library_dir: newDir },
       })
     )
-    libraryDirInput = cfg.storage.library_dir
+    if (!libraryDirError) libraryDirInput = cfg.storage.library_dir
   }
 
   async function browseLibraryDir() {
@@ -119,7 +135,7 @@
     if (!cfg || gamesYMLInput === cfg.rpcs3.games_yml) return
     gamesYMLError = await validatePath('games_yml', gamesYMLInput)
     if (gamesYMLError) return
-    await applyConfig(
+    gamesYMLError = await applyConfig(
       new config.Config({
         ...cfg,
         rpcs3: { ...cfg.rpcs3, games_yml: gamesYMLInput },
@@ -139,7 +155,7 @@
     if (!cfg || hdd0Input === cfg.rpcs3.hdd0_game) return
     hdd0Error = await validatePath('hdd0_game', hdd0Input)
     if (hdd0Error) return
-    await applyConfig(
+    hdd0Error = await applyConfig(
       new config.Config({
         ...cfg,
         rpcs3: { ...cfg.rpcs3, hdd0_game: hdd0Input },
@@ -215,6 +231,9 @@
     <Loading />
   {:else}
     <div class="space-y-6">
+      {#if saveError}
+        <p class="text-sm text-error-fg" role="alert">{saveError}</p>
+      {/if}
       <section>
         <h2 class="mb-2 text-sm font-medium text-fg">Config</h2>
         <div class="panel p-4">
