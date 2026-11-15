@@ -40,7 +40,7 @@ overrides:
     depends:
       - gtk4
       - webkitgtk-6.0
-  # Alpine Linux 3.22 and newer. The APK is built natively against musl.
+  # Alpine Linux 3.23 and newer. The APK is built natively against musl.
   apk:
     depends:
       - gtk4.0

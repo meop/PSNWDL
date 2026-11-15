@@ -125,16 +125,21 @@ activity log, and RPCS3 reconcile/download/install flow.
 
 | Tool | Version | Why |
 |------|---------|-----|
-| [Go](https://go.dev/dl/) | ≥ 1.25 | backend and the pinned Wails 3 toolchain |
-| [Node.js](https://nodejs.org/) | ≥ 20 | frontend toolchain |
-| [pnpm](https://pnpm.io/) | ≥ 9 | frontend package manager |
-| [Wails CLI](https://v3.wails.io) | v3 | build / dev harness |
+| [Go](https://go.dev/dl/) | `toolchain` line in `go.mod` | backend; an older Go fetches that toolchain itself |
+| [Node.js](https://nodejs.org/) | `.node-version` | frontend toolchain |
+| [pnpm](https://pnpm.io/) | `packageManager` in `frontend/package.json` | frontend package manager; pnpm switches to it itself |
+| [Wails CLI](https://v3.wails.io) | the Wails module version in `go.mod` | build / dev harness |
 
-Install the Wails CLI once:
+Each version has one source, which CI reads too. Install the matching Wails
+CLI from the repository root:
 
 ```sh
-go install github.com/wailsapp/wails/v3/cmd/wails3@v3.1.0
+go install "github.com/wailsapp/wails/v3/cmd/wails3@$(go list -m -f '{{.Version}}' github.com/wailsapp/wails/v3)"
 ```
+
+Build `wails3` with the `go.mod` toolchain: `wails3 generate icons` writes
+different PNG bytes under different Go releases, and CI fails when the
+committed icons differ from what it regenerates.
 
 ### Runtime prerequisites
 
@@ -214,7 +219,7 @@ sudo dnf install ./psnwdl-<version>-1.x86_64.rpm
 # Arch Linux (direct prebuilt package)
 sudo pacman -U ./psnwdl-<version>-1-x86_64.pkg.tar.zst
 
-# Alpine Linux 3.22+
+# Alpine Linux 3.23+
 sudo apk add --allow-untrusted ./psnwdl_<version>-r1_x86_64.apk
 ```
 

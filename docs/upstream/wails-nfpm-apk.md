@@ -38,7 +38,7 @@ format-selection switch and help text.
 ## Downstream workaround in PSNWDL
 
 PSNWDL still uses Wails to build the application natively inside an Alpine
-3.22 container so the binary targets musl. Its `generate:apk` task then invokes
+3.23 container so the binary targets musl. Its `generate:apk` task then invokes
 nFPM v2.47.0 directly with the same package configuration used by Wails for
 DEB, RPM, and Arch packages.
 

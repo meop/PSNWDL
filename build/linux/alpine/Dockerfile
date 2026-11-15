@@ -2,12 +2,17 @@
 
 # APK packages target Alpine Linux, which uses musl rather than glibc. Build the
 # Wails binary inside Alpine so the package never contains the Ubuntu binary.
-FROM golang:1.26-alpine3.22 AS builder
+#
+# GO_VERSION comes from go.mod's toolchain line (CI passes it). ALPINE_VERSION
+# is the oldest Alpine release the package supports.
+ARG GO_VERSION
+ARG ALPINE_VERSION=3.23
+FROM golang:${GO_VERSION}-alpine${ALPINE_VERSION} AS builder
 
-ARG PNPM_VERSION=11.18.0
-ARG NFPM_VERSION=v2.47.0
+ARG PNPM_VERSION
+ARG NFPM_VERSION
 ARG TARGETARCH
-ARG WAILS_VERSION=v3.1.0
+ARG WAILS_VERSION
 
 RUN apk add --no-cache \
       build-base \
