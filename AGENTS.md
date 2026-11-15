@@ -216,6 +216,7 @@ These all happened in a prior pass and were fixed — they tend to recur:
 | Change the application version | `VERSION`, then `scripts/Sync-Version.ps1` |
 | Change the application icon | `scripts/Generate-Icons.ps1`, then run it |
 | Change CI packaging/releases | `.github/workflows/pipeline.yaml` |
+| Test an `App` method without Sony or a window | `app_methods_test.go`: `startTestAppWith` + `fakePSN` (swapped in through `App.newPSN`), `pkgServer` for downloads, `internal/pkg/pkgtest` for real PS3 PKGs |
 
 ---
 

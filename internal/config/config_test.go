@@ -115,3 +115,75 @@ func TestLibraryPathHelpers(t *testing.T) {
 		t.Fatalf("firmware path = %q", firmware)
 	}
 }
+
+func TestDefaultPathsLiveUnderHome(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	t.Setenv("PSNWDL_CONFIG", "")
+	base := filepath.Join(home, ".psnwdl")
+
+	if got, err := ConfigPath(); err != nil || got != filepath.Join(base, "config.toml") {
+		t.Fatalf("ConfigPath = %q, %v", got, err)
+	}
+	if got, err := DefaultLibraryDir(); err != nil || got != filepath.Join(base, "library") {
+		t.Fatalf("DefaultLibraryDir = %q, %v", got, err)
+	}
+	if got, err := TitleDirForRoot("", "ps3"); err != nil || got != filepath.Join(base, "library", "ps3", "title") {
+		t.Fatalf("TitleDirForRoot default = %q, %v", got, err)
+	}
+	if got, err := FirmwareDirForRoot("", "ps5"); err != nil || got != filepath.Join(base, "library", "ps5", "firmware") {
+		t.Fatalf("FirmwareDirForRoot default = %q, %v", got, err)
+	}
+	if cfg := Default(); cfg.HomeDir != home || cfg.Storage.LibraryDir != filepath.Join(base, "library") {
+		t.Fatalf("Default paths = %q, %q", cfg.HomeDir, cfg.Storage.LibraryDir)
+	}
+}
+
+func TestSaveRoundTripsAndKeepsHomeDirOutOfTheFile(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "nested", "config.toml")
+	cfg := Default()
+	cfg.RPCS3.GamesYML = `C:\RPCS3\config\games.yml`
+	cfg.UI.Theme = "light"
+	if err := Save(path, cfg); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(data), "home_dir") || strings.Contains(string(data), "HomeDir") {
+		t.Fatalf("HomeDir was written to config.toml:\n%s", data)
+	}
+	got, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.RPCS3 != cfg.RPCS3 || got.UI != cfg.UI || got.HomeDir == "" {
+		t.Fatalf("reloaded = %+v", got)
+	}
+	entries, _ := os.ReadDir(filepath.Dir(path))
+	if len(entries) != 1 {
+		t.Fatalf("Save left temp files behind: %v", entries)
+	}
+}
+
+func TestSaveAndLoadReportFilesystemErrors(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "file")
+	if err := os.WriteFile(file, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := Save(filepath.Join(file, "config.toml"), Default()); err == nil {
+		t.Fatal("Save under a file returned no error")
+	}
+	if err := Save(dir, Default()); err == nil {
+		t.Fatal("Save over a directory returned no error")
+	}
+	if _, err := Load(dir); err == nil || !strings.Contains(err.Error(), "read config") {
+		t.Fatalf("Load of a directory = %v, want a read error", err)
+	}
+	if _, err := Load(filepath.Join(file, "config.toml")); err == nil {
+		t.Fatal("Load that cannot write defaults returned no error")
+	}
+}

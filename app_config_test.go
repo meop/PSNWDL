@@ -8,12 +8,20 @@ import (
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 
+	"PSNWDL/internal/activity"
 	"PSNWDL/internal/config"
 )
 
 // startTestApp runs the real service startup against a config file in a
 // temporary home, with a real (not running) Wails application for events.
 func startTestApp(t *testing.T, initial string) (*App, string) {
+	t.Helper()
+	return startTestAppWith(t, initial, nil)
+}
+
+// startTestAppWith is startTestApp with fake standing in for Sony's
+// endpoints; a nil fake keeps the real PSN client.
+func startTestAppWith(t *testing.T, initial string, fake psnClient) (*App, string) {
 	t.Helper()
 	home := t.TempDir()
 	t.Setenv("HOME", home)
@@ -30,6 +38,9 @@ func startTestApp(t *testing.T, initial string) (*App, string) {
 	}
 
 	app := NewApp(application.New(application.Options{Name: "PSNWDL test"}))
+	if fake != nil {
+		app.newPSN = func(config.Network, *activity.Sink) psnClient { return fake }
+	}
 	if err := app.ServiceStartup(context.Background(), application.ServiceOptions{}); err != nil {
 		t.Fatalf("ServiceStartup: %v", err)
 	}

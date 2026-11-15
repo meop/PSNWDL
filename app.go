@@ -22,18 +22,39 @@ import (
 	"PSNWDL/internal/rpcs3"
 )
 
+// psnClient is the subset of psn.Client the App layer calls, so tests can
+// substitute a fake for Sony's endpoints.
+type psnClient interface {
+	LookupPS3(ctx context.Context, tid string) (*psn.Title, error)
+	LookupPS3WithDRMFree(ctx context.Context, tid string, includeDRMFree bool) (*psn.Title, error)
+	LookupPS4(ctx context.Context, tid string) (*psn.Title, error)
+	LookupVita(ctx context.Context, tid string) (*psn.Title, error)
+	LookupPS3Firmware(ctx context.Context) (*psn.FirmwareList, error)
+	LookupPS4Firmware(ctx context.Context) (*psn.FirmwareList, error)
+	LookupPS5Firmware(ctx context.Context) (*psn.FirmwareList, error)
+	LookupVitaFirmware(ctx context.Context) (*psn.FirmwareList, error)
+}
+
 type App struct {
 	ctx      context.Context
 	wailsApp *application.App
 	cfg      *config.Config
 	cfgPath  string
-	psn      *psn.Client
+	psn      psnClient
 	jobs     *jobs.Queue
 	activity *activity.Sink
+
+	// newPSN builds the PSN client from network settings; tests replace it.
+	newPSN func(config.Network, *activity.Sink) psnClient
 }
 
 func NewApp(wailsApp *application.App) *App {
-	return &App{wailsApp: wailsApp}
+	return &App{
+		wailsApp: wailsApp,
+		newPSN: func(net config.Network, act *activity.Sink) psnClient {
+			return psn.NewClient(net, act)
+		},
+	}
 }
 
 func (a *App) ServiceStartup(ctx context.Context, _ application.ServiceOptions) error {
@@ -64,7 +85,7 @@ func (a *App) ServiceStartup(ctx context.Context, _ application.ServiceOptions) 
 	if err := ensureConfigLibraryDir(a.cfg); err != nil {
 		log.Printf("library dir: %v", err)
 	}
-	a.psn = psn.NewClient(a.cfg.Network, a.activity)
+	a.psn = a.newPSN(a.cfg.Network, a.activity)
 	a.jobs = jobs.NewQueue(a.cfg.Network, a.cfg.Storage.LibraryDir, emitter, a.activity)
 	return nil
 }
@@ -241,7 +262,7 @@ func (a *App) SaveConfig(next *config.Config) error {
 	}
 	a.cfg = next
 	a.wailsApp.Event.Emit("config:updated", *a.cfg)
-	a.psn = psn.NewClient(a.cfg.Network, a.activity)
+	a.psn = a.newPSN(a.cfg.Network, a.activity)
 	a.jobs.SetLibraryDir(a.cfg.Storage.LibraryDir)
 	a.jobs.SetNetwork(a.cfg.Network)
 	go a.emitDownloadLibrary()
@@ -470,12 +491,22 @@ func partitionSyncTargets(targets []string, activeJobs []jobs.Job) (removable, b
 // `path` may start with ~ (expanded against the user home dir). If the path
 // does not exist the OS file manager will surface its own error.
 func (a *App) OpenFolder(path string) error {
+	cmd, err := folderCommand(runtime.GOOS, path)
+	if err != nil {
+		return err
+	}
+	return cmd.Start()
+}
+
+// folderCommand resolves path and returns the file-manager command for goos,
+// without starting it.
+func folderCommand(goos, path string) (*exec.Cmd, error) {
 	absPath := path
 	if !filepath.IsAbs(path) {
 		if strings.HasPrefix(path, "~") {
 			home, err := os.UserHomeDir()
 			if err != nil {
-				return fmt.Errorf("resolve home dir: %w", err)
+				return nil, fmt.Errorf("resolve home dir: %w", err)
 			}
 			absPath = filepath.Join(home, path[1:])
 		} else {
@@ -488,16 +519,14 @@ func (a *App) OpenFolder(path string) error {
 		}
 	}
 
-	var cmd *exec.Cmd
-	switch runtime.GOOS {
+	switch goos {
 	case "windows":
-		cmd = exec.Command("explorer", absPath)
+		return exec.Command("explorer", absPath), nil
 	case "darwin":
-		cmd = exec.Command("open", absPath)
+		return exec.Command("open", absPath), nil
 	default: // linux, *bsd, etc.
-		cmd = exec.Command("xdg-open", absPath)
+		return exec.Command("xdg-open", absPath), nil
 	}
-	return cmd.Start()
 }
 
 // PendingLibraryPKGsPS3 returns the number of Library PKGs newer than their
