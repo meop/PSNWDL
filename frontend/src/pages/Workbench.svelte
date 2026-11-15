@@ -944,10 +944,10 @@
           <button
             onclick={checkServer}
             disabled={!canCheckServer()}
-            class="btn btn-secondary w-24 justify-center"
+            class="btn btn-secondary"
             title="Ask the server again for every title's updates"
           >
-            {checkingServer ? 'Checking' : 'Check'}
+            Check
           </button>
         </div>
       {/if}
