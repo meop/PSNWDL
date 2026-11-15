@@ -43,3 +43,8 @@ export const JobProgress = "job:progress";
  */
 export const JobState = "job:state";
 
+/**
+ * Name of the custom event "rpcs3:changed".
+ */
+export const Rpcs3Changed = "rpcs3:changed";
+

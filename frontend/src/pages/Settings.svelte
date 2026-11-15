@@ -9,6 +9,7 @@
     SaveConfig,
     ValidateSettingsPath,
   } from '../../bindings/PSNWDL/app'
+  import { Events } from '@wailsio/runtime'
   import * as config from '../../bindings/PSNWDL/internal/config'
   import { MODES } from '../app/types'
   import { theme } from '../app/theme.svelte'
@@ -32,6 +33,34 @@
 
   onMount(async () => {
     await hydrateSettings()
+  })
+
+  // config:updated also reports edits made to config.toml outside the app.
+  // Fields whose saved value changed show the new value; the rest keep what
+  // is being typed.
+  $effect(() => {
+    const off = Events.On('config:updated', ({ data: next }) => {
+      const prev = cfg
+      if (!prev || !next) return
+      if (next.storage.library_dir !== prev.storage.library_dir) {
+        libraryDirInput = next.storage.library_dir
+        libraryDirError = ''
+      }
+      if (next.rpcs3.games_yml !== prev.rpcs3.games_yml) {
+        gamesYMLInput = next.rpcs3.games_yml
+        gamesYMLError = ''
+      }
+      if (next.rpcs3.hdd0_game !== prev.rpcs3.hdd0_game) {
+        hdd0Input = next.rpcs3.hdd0_game
+        hdd0Error = ''
+      }
+      parallelDownloads = next.network.parallel_downloads
+      retries = next.network.retries
+      timeoutSeconds = next.network.timeout_seconds
+      verifyTLS = next.network.verify_tls
+      cfg = next
+    })
+    return () => off()
   })
 
   async function hydrateSettings() {

@@ -22,6 +22,18 @@ func TestScanUsesFirmwareAndTitleBranches(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(titleDir, "BCUS98114_01.05.pkg"), []byte("pkg"), 0o644); err != nil {
 		t.Fatal(err)
 	}
+	// A download in progress, alone in its title folder or beside a finished
+	// one, is not listed.
+	if err := os.WriteFile(filepath.Join(titleDir, "BCUS98114_01.06.pkg.part"), []byte("part"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	partialDir := filepath.Join(root, "ps3", "title", "BLES00001")
+	if err := os.MkdirAll(partialDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(partialDir, "BLES00001_01.00.pkg.part"), []byte("part"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 
 	titles, err := Scan(root)
 	if err != nil {
@@ -40,7 +52,7 @@ func TestScanUsesFirmwareAndTitleBranches(t *testing.T) {
 	if byID["firmware"].Region != "us" {
 		t.Errorf("firmware region = %q, want us", byID["firmware"].Region)
 	}
-	if byID["BCUS98114"].Path != titleDir {
+	if byID["BCUS98114"].Path != titleDir || byID["BCUS98114"].FileCount != 1 {
 		t.Errorf("download title = %+v", byID["BCUS98114"])
 	}
 }

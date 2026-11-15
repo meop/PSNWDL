@@ -115,6 +115,11 @@ func scanTitle(mode, dir, titleID string) (Title, error) {
 		if d.IsDir() {
 			return nil
 		}
+		// A download in progress is not in the Library until it is renamed into
+		// place.
+		if strings.HasSuffix(d.Name(), ".part") {
+			return nil
+		}
 		info, err := d.Info()
 		if err != nil {
 			return err

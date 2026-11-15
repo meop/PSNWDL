@@ -79,6 +79,13 @@ export function InstallLibraryPKGsPS3(): $CancellablePromise<number> {
     return $Call.ByID(2930352174);
 }
 
+/**
+ * InstallTitlePKGsPS3 is InstallLibraryPKGsPS3 for one title.
+ */
+export function InstallTitlePKGsPS3(tid: string): $CancellablePromise<number> {
+    return $Call.ByID(3966328717, tid);
+}
+
 export function ListDownloadLibrary(): $CancellablePromise<downloads$0.Title[]> {
     return $Call.ByID(526952512).then(($result: any) => {
         return $$createType4($result);
@@ -114,6 +121,17 @@ export function ListRPCS3Library(): $CancellablePromise<rpcs3$0.Entry[]> {
 }
 
 /**
+ * LocalTitlesPS3 reads the part of each Emulator row that comes from local
+ * files only (its name and whether its install folder exists), so a change on
+ * disk can refresh rows without asking the server again.
+ */
+export function LocalTitlesPS3(entries: rpcs3$0.Entry[]): $CancellablePromise<library$0.LocalTitle[]> {
+    return $Call.ByID(1836018475, entries).then(($result: any) => {
+        return $$createType12($result);
+    });
+}
+
+/**
  * OpenFolder opens the given directory in the system's file manager.
  * Cross-platform: Explorer on Windows, `open` on macOS, `xdg-open` on Linux.
  * `path` may start with ~ (expanded against the user home dir). If the path
@@ -128,11 +146,14 @@ export function PauseJob(id: string): $CancellablePromise<void> {
 }
 
 /**
- * PendingLibraryPKGsPS3 returns the number of Library PKGs newer than their
- * installed RPCS3 versions.
+ * PendingLibraryPKGsPS3 returns, per title ID, the number of Library PKGs
+ * newer than the title's installed RPCS3 version. Titles with none are left
+ * out.
  */
-export function PendingLibraryPKGsPS3(): $CancellablePromise<number> {
-    return $Call.ByID(1032921658);
+export function PendingLibraryPKGsPS3(): $CancellablePromise<{ [_ in string]?: number }> {
+    return $Call.ByID(1032921658).then(($result: any) => {
+        return $$createType13($result);
+    });
 }
 
 export function PickDirectory(title: string, defaultDirectory: string): $CancellablePromise<string> {
@@ -149,7 +170,7 @@ export function PickGamesYML(defaultDirectory: string): $CancellablePromise<stri
  */
 export function ReconcileTitlePS3(entry: rpcs3$0.Entry): $CancellablePromise<library$0.Row> {
     return $Call.ByID(566170611, entry).then(($result: any) => {
-        return $$createType11($result);
+        return $$createType14($result);
     });
 }
 
@@ -170,19 +191,19 @@ export function SaveConfig(next: config$0.Config | null): $CancellablePromise<vo
 
 export function SearchPS3(tid: string, includeDRMFree: boolean): $CancellablePromise<psn$0.Title | null> {
     return $Call.ByID(156335737, tid, includeDRMFree).then(($result: any) => {
-        return $$createType13($result);
+        return $$createType16($result);
     });
 }
 
 export function SearchPS4(tid: string): $CancellablePromise<psn$0.Title | null> {
     return $Call.ByID(173113356, tid).then(($result: any) => {
-        return $$createType13($result);
+        return $$createType16($result);
     });
 }
 
 export function SearchVita(tid: string): $CancellablePromise<psn$0.Title | null> {
     return $Call.ByID(1407672275, tid).then(($result: any) => {
-        return $$createType13($result);
+        return $$createType16($result);
     });
 }
 
@@ -192,7 +213,7 @@ export function SearchVita(tid: string): $CancellablePromise<psn$0.Title | null>
  */
 export function SyncAllPS3(entries: rpcs3$0.Entry[]): $CancellablePromise<string[]> {
     return $Call.ByID(2563320289, entries).then(($result: any) => {
-        return $$createType14($result);
+        return $$createType17($result);
     });
 }
 
@@ -202,7 +223,7 @@ export function SyncAllPS3(entries: rpcs3$0.Entry[]): $CancellablePromise<string
  */
 export function SyncTitlePS3(tid: string): $CancellablePromise<string[]> {
     return $Call.ByID(2047523786, tid).then(($result: any) => {
-        return $$createType14($result);
+        return $$createType17($result);
     });
 }
 
@@ -222,7 +243,10 @@ const $$createType7 = jobs$0.Job.createFrom;
 const $$createType8 = $Create.Array($$createType7);
 const $$createType9 = rpcs3$0.Entry.createFrom;
 const $$createType10 = $Create.Array($$createType9);
-const $$createType11 = library$0.Row.createFrom;
-const $$createType12 = psn$0.Title.createFrom;
-const $$createType13 = $Create.Nullable($$createType12);
-const $$createType14 = $Create.Array($Create.Any);
+const $$createType11 = library$0.LocalTitle.createFrom;
+const $$createType12 = $Create.Array($$createType11);
+const $$createType13 = $Create.Map($Create.Any, $Create.Any);
+const $$createType14 = library$0.Row.createFrom;
+const $$createType15 = psn$0.Title.createFrom;
+const $$createType16 = $Create.Nullable($$createType15);
+const $$createType17 = $Create.Array($Create.Any);

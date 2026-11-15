@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 
@@ -44,6 +45,7 @@ func startTestAppWith(t *testing.T, initial string, fake psnClient) (*App, strin
 	if err := app.ServiceStartup(context.Background(), application.ServiceOptions{}); err != nil {
 		t.Fatalf("ServiceStartup: %v", err)
 	}
+	t.Cleanup(func() { _ = app.ServiceShutdown() })
 	if app.ConfigFilePath() != cfgPath {
 		t.Fatalf("ConfigFilePath = %q, want %q", app.ConfigFilePath(), cfgPath)
 	}
@@ -162,5 +164,65 @@ func TestSaveConfigRejectsInvalidChangedPaths(t *testing.T) {
 				t.Fatalf("config file changed after a rejected save: %+v", *got)
 			}
 		})
+	}
+}
+
+// An edit to config.toml made outside the app is applied like a save from
+// Settings; the app's own saves change nothing further.
+func TestEditedConfigFileIsApplied(t *testing.T) {
+	app, cfgPath := startTestApp(t, "")
+	libraryDir := filepath.Join(t.TempDir(), "library")
+
+	edited := app.GetConfig()
+	edited.Storage.LibraryDir = libraryDir
+	edited.Network.ParallelDownloads = 2
+	if err := config.Save(cfgPath, &edited); err != nil {
+		t.Fatal(err)
+	}
+
+	deadline := time.Now().Add(10 * time.Second)
+	for app.GetConfig().Network.ParallelDownloads != 2 {
+		if time.Now().After(deadline) {
+			t.Fatal("edited config.toml was not applied")
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if got := app.GetConfig().Storage.LibraryDir; got != libraryDir {
+		t.Fatalf("library_dir = %q, want %q", got, libraryDir)
+	}
+	if _, err := os.Stat(libraryDir); err != nil {
+		t.Fatalf("edited library_dir was not created: %v", err)
+	}
+	if !hasActivity(app, "library", "Applied settings changed in") {
+		t.Fatal("applying the edit was not narrated")
+	}
+}
+
+func TestReloadConfigFileIgnoresBadAndUnchangedFiles(t *testing.T) {
+	app, cfgPath := startTestApp(t, "")
+	before := app.GetConfig()
+
+	app.reloadConfigFile()
+	if hasActivity(app, "library", "Applied settings") {
+		t.Fatal("an unchanged config.toml was re-applied")
+	}
+
+	if err := os.WriteFile(cfgPath, []byte("not = [valid"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	app.reloadConfigFile()
+	if !hasActivity(app, "library", "Ignored an edit to") {
+		t.Fatal("a config.toml that does not parse was not reported")
+	}
+	if app.GetConfig().Storage.LibraryDir != before.Storage.LibraryDir {
+		t.Fatal("a config.toml that does not parse changed the running config")
+	}
+
+	if err := os.Remove(cfgPath); err != nil {
+		t.Fatal(err)
+	}
+	app.reloadConfigFile()
+	if _, err := os.Stat(cfgPath); err == nil {
+		t.Fatal("a deleted config.toml was rewritten with defaults")
 	}
 }

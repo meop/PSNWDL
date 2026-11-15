@@ -86,14 +86,33 @@ func ReconcileTitlePS3(ctx context.Context, entry rpcs3.Entry, client PSNLookup,
 	return reconcileOne(ctx, entry, client, libraryRoot, hdd0Game)
 }
 
+// LocalTitle is the part of a Row read from local files only.
+type LocalTitle struct {
+	TitleID    string `json:"title_id"`
+	Name       string `json:"name,omitempty"`
+	InstallDir string `json:"install_dir"`
+	Missing    bool   `json:"missing"`
+}
+
+// LocalTitlePS3 reads entry's name and install-folder state from disk.
+func LocalTitlePS3(entry rpcs3.Entry, hdd0Game string) LocalTitle {
+	return LocalTitle{
+		TitleID:    entry.TitleID,
+		InstallDir: entry.InstallDir,
+		Missing:    !installDirExists(entry.InstallDir),
+		// Name comes only from the locally installed PARAM.SFO — the same
+		// source RPCS3 itself reads. We deliberately do not fall back to the
+		// PSN-supplied name: RPCS3 has no web lookup at all, so a title it
+		// can't label (missing or unreadable PARAM.SFO) should show the same
+		// way here, not diverge by picking up a name from a source RPCS3
+		// never consults.
+		Name: localTitleName(entry, hdd0Game),
+	}
+}
+
 func reconcileOne(ctx context.Context, entry rpcs3.Entry, client PSNLookup, libraryRoot, hdd0Game string) Row {
-	row := Row{TitleID: entry.TitleID, InstallDir: entry.InstallDir, Missing: !installDirExists(entry.InstallDir)}
-	// Name comes only from the locally installed PARAM.SFO — the same source
-	// RPCS3 itself reads. We deliberately do not fall back to the PSN-supplied
-	// name: RPCS3 has no web lookup at all, so a title it can't label (missing
-	// or unreadable PARAM.SFO) should show the same way here, not diverge by
-	// picking up a name from a source RPCS3 never consults.
-	row.Name = localTitleName(entry, hdd0Game)
+	local := LocalTitlePS3(entry, hdd0Game)
+	row := Row{TitleID: entry.TitleID, InstallDir: entry.InstallDir, Missing: local.Missing, Name: local.Name}
 
 	title, err := client.LookupPS3(ctx, entry.TitleID)
 	if err != nil {

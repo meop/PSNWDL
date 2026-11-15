@@ -666,7 +666,7 @@ func TestLibraryInstallPS3InstallsOnlyNewerPKGs(t *testing.T) {
 	_, hdd0Game := makeRPCS3Paths(t)
 	app, _ := startTestAppWith(t, "", &fakePSN{})
 
-	if _, err := app.PendingLibraryPKGsPS3(); err == nil {
+	if _, err := pendingTotal(app); err == nil {
 		t.Fatal("PendingLibraryPKGsPS3 without dev_hdd0/game returned no error")
 	}
 	if _, err := app.InstallLibraryPKGsPS3(); err == nil {
@@ -677,7 +677,7 @@ func TestLibraryInstallPS3InstallsOnlyNewerPKGs(t *testing.T) {
 	if err := app.SaveConfig(&next); err != nil {
 		t.Fatal(err)
 	}
-	if n, err := app.PendingLibraryPKGsPS3(); err != nil || n != 0 {
+	if n, err := pendingTotal(app); err != nil || n != 0 {
 		t.Fatalf("PendingLibraryPKGsPS3 with an empty Library = %d, %v", n, err)
 	}
 	if n, err := app.InstallLibraryPKGsPS3(); err != nil || n != 0 {
@@ -693,7 +693,7 @@ func TestLibraryInstallPS3InstallsOnlyNewerPKGs(t *testing.T) {
 	pkgtest.WriteTitlePKG(t, filepath.Join(filepath.Dir(titleFile(app, "BCUS98114", "x")), "copy", "dup.pkg"), "BCUS98114", "01.03", "Game")
 	pkgtest.WriteTitlePKG(t, titleFile(app, "BLES00001", "01.00"), "BLES00001", "01.00", "Other")
 
-	if n, err := app.PendingLibraryPKGsPS3(); err != nil || n != 3 {
+	if n, err := pendingTotal(app); err != nil || n != 3 {
 		t.Fatalf("PendingLibraryPKGsPS3 = %d, %v; want 3 (01.02, 01.03, BLES00001)", n, err)
 	}
 	n, err := app.InstallLibraryPKGsPS3()
@@ -709,7 +709,7 @@ func TestLibraryInstallPS3InstallsOnlyNewerPKGs(t *testing.T) {
 	if !hasActivity(app, "pkg", "Library install complete: 3 PKG(s) installed") {
 		t.Fatal("install was not narrated")
 	}
-	if n, err := app.PendingLibraryPKGsPS3(); err != nil || n != 0 {
+	if n, err := pendingTotal(app); err != nil || n != 0 {
 		t.Fatalf("PendingLibraryPKGsPS3 after install = %d, %v", n, err)
 	}
 }
@@ -725,13 +725,13 @@ func TestLibraryInstallPS3SurfacesBadPKGs(t *testing.T) {
 
 	// Only an unreadable PKG: discovery fails outright.
 	writeFile(t, titleFile(app, "BCUS98114", "01.00"), []byte("not a pkg"))
-	if _, err := app.PendingLibraryPKGsPS3(); err == nil {
+	if _, err := pendingTotal(app); err == nil {
 		t.Fatal("discovery of only unreadable PKGs returned no error")
 	}
 
 	// A readable PKG beside it: discovery warns and carries on.
 	pkgtest.WriteTitlePKG(t, titleFile(app, "BLES00001", "01.00"), "BLES00001", "01.00", "Other")
-	if n, err := app.PendingLibraryPKGsPS3(); err != nil || n != 1 {
+	if n, err := pendingTotal(app); err != nil || n != 1 {
 		t.Fatalf("PendingLibraryPKGsPS3 = %d, %v", n, err)
 	}
 	if !hasActivity(app, "pkg", "Library PKG discovery warning") {
@@ -844,5 +844,76 @@ func TestJobCompletionRefreshesDownloads(t *testing.T) {
 	emitter.Emit(jobs.EventJobState, jobs.Job{State: jobs.StateDone})
 	if done.Load() != 1 {
 		t.Fatalf("onJobDone called %d times, want 1", done.Load())
+	}
+}
+
+// pendingTotal sums PendingLibraryPKGsPS3 over every title.
+func pendingTotal(app *App) (int, error) {
+	counts, err := app.PendingLibraryPKGsPS3()
+	total := 0
+	for _, n := range counts {
+		total += n
+	}
+	return total, err
+}
+
+func TestInstallTitlePKGsPS3InstallsOnlyThatTitle(t *testing.T) {
+	_, hdd0Game := makeRPCS3Paths(t)
+	app, _ := startTestAppWith(t, "", &fakePSN{})
+	next := app.GetConfig()
+	next.RPCS3.HDD0Game = hdd0Game
+	if err := app.SaveConfig(&next); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := app.InstallTitlePKGsPS3("not a title"); err == nil {
+		t.Fatal("InstallTitlePKGsPS3 accepted an invalid title ID")
+	}
+
+	pkgtest.WriteTitlePKG(t, titleFile(app, "BCUS98114", "01.01"), "BCUS98114", "01.01", "Game")
+	pkgtest.WriteTitlePKG(t, titleFile(app, "BCUS98114", "01.02"), "BCUS98114", "01.02", "Game")
+	pkgtest.WriteTitlePKG(t, titleFile(app, "BLES00001", "01.00"), "BLES00001", "01.00", "Other")
+
+	counts, err := app.PendingLibraryPKGsPS3()
+	if err != nil || counts["BCUS98114"] != 2 || counts["BLES00001"] != 1 || len(counts) != 2 {
+		t.Fatalf("PendingLibraryPKGsPS3 = %v, %v", counts, err)
+	}
+	if n, err := app.InstallTitlePKGsPS3("BCUS98114"); err != nil || n != 2 {
+		t.Fatalf("InstallTitlePKGsPS3 = %d, %v", n, err)
+	}
+	if v, _ := library.InstalledVersion(hdd0Game, "BCUS98114"); v != "01.02" {
+		t.Fatalf("installed BCUS98114 version = %q, want 01.02", v)
+	}
+	counts, err = app.PendingLibraryPKGsPS3()
+	if err != nil || len(counts) != 1 || counts["BLES00001"] != 1 {
+		t.Fatalf("PendingLibraryPKGsPS3 after one title's install = %v, %v", counts, err)
+	}
+	if n, err := app.InstallTitlePKGsPS3("BCUS98114"); err != nil || n != 0 {
+		t.Fatalf("second InstallTitlePKGsPS3 = %d, %v", n, err)
+	}
+}
+
+func TestLocalTitlesPS3ReadsOnlyLocalFiles(t *testing.T) {
+	_, hdd0Game := makeRPCS3Paths(t)
+	app, _ := startTestAppWith(t, "", &fakePSN{})
+	next := app.GetConfig()
+	next.RPCS3.HDD0Game = hdd0Game
+	if err := app.SaveConfig(&next); err != nil {
+		t.Fatal(err)
+	}
+	installDir := t.TempDir()
+	writeFile(t, filepath.Join(hdd0Game, "BCUS98114", "PARAM.SFO"), pkgtest.SFO("BCUS98114", "01.01", "Game"))
+
+	titles := app.LocalTitlesPS3([]rpcs3.Entry{
+		{TitleID: "BCUS98114", InstallDir: installDir},
+		{TitleID: "BLES00001", InstallDir: filepath.Join(installDir, "gone")},
+	})
+	if len(titles) != 2 {
+		t.Fatalf("LocalTitlesPS3 = %+v", titles)
+	}
+	if titles[0].Name != "Game" || titles[0].Missing {
+		t.Fatalf("installed title = %+v", titles[0])
+	}
+	if titles[1].Name != "" || !titles[1].Missing {
+		t.Fatalf("missing title = %+v", titles[1])
 	}
 }

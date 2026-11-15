@@ -10,6 +10,39 @@ import { Create as $Create } from "@wailsio/runtime";
 import * as psn$0 from "../psn/models.js";
 
 /**
+ * LocalTitle is the part of a Row read from local files only.
+ */
+export class LocalTitle {
+    "title_id": string;
+    "name"?: string;
+    "install_dir": string;
+    "missing": boolean;
+
+    /** Creates a new LocalTitle instance. */
+    constructor($$source: Partial<LocalTitle> = {}) {
+        if (!("title_id" in $$source)) {
+            this["title_id"] = "";
+        }
+        if (!("install_dir" in $$source)) {
+            this["install_dir"] = "";
+        }
+        if (!("missing" in $$source)) {
+            this["missing"] = false;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new LocalTitle instance from a string or object.
+     */
+    static createFrom($$source: any = {}): LocalTitle {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new LocalTitle($$parsedSource as Partial<LocalTitle>);
+    }
+}
+
+/**
  * Row describes how completely one RPCS3 title's server update set exists in
  * the download library. Installation state is deliberately not part of this
  * view; the Emulator pane owns synchronization, while Library owns stored files.

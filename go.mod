@@ -5,6 +5,7 @@ go 1.27.0
 toolchain go1.27.4
 
 require (
+	github.com/fsnotify/fsnotify v1.10.1
 	github.com/pelletier/go-toml/v2 v2.3.1
 	github.com/wailsapp/wails/v3 v3.1.0
 	gopkg.in/yaml.v3 v3.0.1

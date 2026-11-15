@@ -94,14 +94,20 @@ module root to regenerate the TS models/bindings, then rebuild.
    with the right scope so the Activity console narrates it. A scope offered
    as a filter chip with no producer is a dead UI element.
 
-9. **The four workbench panes refresh independently.** Emulator reconciliation
-   runs once at application startup, then only through its Refresh control.
-   Download discovery runs only through Search. Platform changes refresh only
-   the local Library. Library changes may recompute already-cached
-   Download/Emulator row state, but must not parse `games.yml` or make PSN
-   requests. Sync actions use the already-loaded Emulator rows. Every completed
-   job refreshes Library. Do not add file watching, periodic reconciliation, or
-   cross-pane network refreshes.
+9. **Panes refresh from the files they show, and from Settings.** The backend
+   (`internal/watch`, wired in `App.watchConfiguredPaths`) watches
+   `config.toml` and the three paths it names. A change to `config.toml` made
+   outside the app is applied like a save from Settings. A Library change
+   emits `downloads:updated`, and a `games.yml` or `dev_hdd0/game` change
+   emits `rpcs3:changed`. Neither asks Sony anything: Library changes
+   recompute cached Download/Emulator row state, and `rpcs3:changed` rereads
+   `games.yml` and local title state, asking the server only about titles new
+   to the list. The full Emulator reconciliation (one PSN lookup per title)
+   runs at startup and when a Settings change points `games.yml` or
+   `dev_hdd0/game` somewhere else. Download discovery runs only through
+   Search. There is no Refresh control and no periodic polling; a pane that
+   needs one means a watched path is missing. Download and Install actions use
+   the already-loaded Emulator rows.
 
 10. **The queue is application-wide and has a header flyout.** Download and
     Emulator actions share one backend queue and one concurrency limit. The
@@ -121,10 +127,13 @@ module root to regenerate the TS models/bindings, then rebuild.
     firmware/title result is currently loaded. Do not turn Library changes into
     fresh PSN searches.
 
-13. **Emulator sync is exact.** Per-title Sync removes unexpected files and
-    queues every missing server-advertised package. Sync all also removes PS3
-    title folders not represented in RPCS3. Never reduce this to a
-    highest-version comparison; gaps between versions must remain detectable.
+13. **Emulator downloads are exact.** Per-title Download (backed by
+    `SyncTitlePS3`) removes unexpected files and queues every missing
+    server-advertised package. Download all also removes PS3 title folders not
+    represented in RPCS3. Never reduce this to a highest-version comparison;
+    gaps between versions must remain detectable. Per-title Install and
+    Install all install only Library PKGs newer than the installed version,
+    one install at a time (`App.installMu`).
 
 14. **`VERSION` is the only hand-edited application version.** The frontend
     reads it directly. Run `pwsh ./scripts/Sync-Version.ps1` to update Wails'
@@ -210,6 +219,7 @@ These all happened in a prior pass and were fixed — they tend to recur:
 | Change a PSN endpoint / add a console | `internal/psn/` (`ps3.go`, `ps4.go`, `vita.go`, `firmware.go`) |
 | Touch PKG parsing/extraction | `internal/pkg/` (`header.go`, `decrypt.go`, `extract.go`, `sfo.go`) |
 | Change library reconciliation logic | `internal/library/reconcile.go` |
+| Refresh a pane when another file changes | `App.watchConfiguredPaths` in `app.go` (targets) and `internal/watch` |
 | Add a page | `frontend/src/pages/`, register in `frontend/src/app/types.ts` and `App.svelte` visibility rules |
 | Add a shared store | `frontend/src/app/*.svelte.ts` |
 | Change colors / add a theme token | `frontend/src/style.css` |

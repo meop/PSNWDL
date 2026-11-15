@@ -28,6 +28,7 @@ declare module "@wailsio/runtime" {
             "job:added": jobs$0.Job;
             "job:progress": jobs$0.Job;
             "job:state": jobs$0.Job;
+            "rpcs3:changed": string;
         }
     }
 }

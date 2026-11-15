@@ -82,11 +82,16 @@ versions must pass its review process before becoming available on the normal fe
   automatic retries.
 - **Library manager** — shows downloaded title updates and region-grouped
   firmware files, with checkbox deletion by branch, folder, or individual file.
-- **RPCS3 library synchronization (PS3 only)** — compares every server package
-  for each RPCS3 title with the download library, reports none/some/all
-  downloaded, removes unexpected packages, and downloads missing ones.
-- **RPCS3 Library install (PS3)** — detects Library PKGs newer
-  than RPCS3's installed versions and installs them in version order.
+- **RPCS3 downloads (PS3 only)** — compares every server package for each
+  RPCS3 title with the download library and reports none/some/all downloaded.
+  Download (per title) and Download all fetch the missing packages and remove
+  unexpected ones.
+- **RPCS3 install (PS3)** — Install (per title) and Install all install the
+  Library PKGs newer than RPCS3's installed version, in version order.
+- **Live refresh** — PSNWDL watches its settings file and the three paths it
+  names (the Library, `games.yml` and `dev_hdd0/game`). An edit to the
+  settings file applies like a change in Settings, and changes made by RPCS3,
+  a file manager or another tool show up in the panes without a refresh.
 - **Activity** — a log of every fetch, reconcile, download, verify, and extract,
   filterable by scope (`psn` / `jobs` / `library` / `pkg`).
 - **Light / dark / system theme** — applies live; persists in config.

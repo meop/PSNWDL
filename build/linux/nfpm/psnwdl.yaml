@@ -1,7 +1,7 @@
 name: "psnwdl"
 arch: ${GOARCH}
 platform: "linux"
-version: "1.0.0-rc.1"
+version: "1.0.0-rc.2"
 section: "utils"
 priority: "optional"
 maintainer: "Marshall Porter <meoporter@gmail.com>"

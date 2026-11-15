@@ -20,6 +20,7 @@ func init() {
 	application.RegisterEvent[config.Config]("config:updated")
 	application.RegisterEvent[[]downloads.Title]("downloads:updated")
 	application.RegisterEvent[string]("downloads:error")
+	application.RegisterEvent[string](EventRPCS3Changed)
 	application.RegisterEvent[jobs.Job](jobs.EventJobAdded)
 	application.RegisterEvent[jobs.Job](jobs.EventJobProgress)
 	application.RegisterEvent[jobs.Job](jobs.EventJobState)

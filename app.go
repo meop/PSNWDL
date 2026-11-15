@@ -7,8 +7,11 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 
@@ -20,7 +23,16 @@ import (
 	"PSNWDL/internal/pkg"
 	"PSNWDL/internal/psn"
 	"PSNWDL/internal/rpcs3"
+	"PSNWDL/internal/watch"
 )
+
+// EventRPCS3Changed reports that games.yml ("games") or dev_hdd0/game
+// ("hdd0") changed on disk.
+const EventRPCS3Changed = "rpcs3:changed"
+
+// watchDelay is how long a watched path must be quiet before its change is
+// reported, so a burst of writes (a copy, an install) is one refresh.
+const watchDelay = 500 * time.Millisecond
 
 // psnClient is the subset of psn.Client the App layer calls, so tests can
 // substitute a fake for Sony's endpoints.
@@ -43,6 +55,14 @@ type App struct {
 	psn      psnClient
 	jobs     *jobs.Queue
 	activity *activity.Sink
+	watcher  *watch.Watcher
+
+	// cfgMu serializes applying a new config, from Settings or from an edit
+	// to config.toml.
+	cfgMu sync.Mutex
+	// installMu serializes PKG installs, so a title's versions are never
+	// extracted by two installs at once.
+	installMu sync.Mutex
 
 	// newPSN builds the PSN client from network settings; tests replace it.
 	newPSN func(config.Network, *activity.Sink) psnClient
@@ -87,7 +107,79 @@ func (a *App) ServiceStartup(ctx context.Context, _ application.ServiceOptions) 
 	}
 	a.psn = a.newPSN(a.cfg.Network, a.activity)
 	a.jobs = jobs.NewQueue(a.cfg.Network, a.cfg.Storage.LibraryDir, emitter, a.activity)
+	watcher, err := watch.New(watchDelay, a.onWatchedChange)
+	if err != nil {
+		log.Printf("file watcher: %v", err)
+	} else {
+		a.watcher = watcher
+		a.watchConfiguredPaths()
+	}
 	return nil
+}
+
+// ServiceShutdown stops watching files.
+func (a *App) ServiceShutdown() error {
+	if a.watcher != nil {
+		return a.watcher.Close()
+	}
+	return nil
+}
+
+// watchConfiguredPaths watches config.toml and the three paths it names:
+// the Library, games.yml and dev_hdd0/game.
+func (a *App) watchConfiguredPaths() {
+	if a.watcher == nil {
+		return
+	}
+	targets := []watch.Target{
+		// root/<mode>/{firmware,title}/<region or title ID>/files
+		{Kind: "library", Root: a.cfg.Storage.LibraryDir, Depth: 3},
+		// <title ID>/PARAM.SFO holds the installed version.
+		{Kind: "hdd0", Root: a.cfg.RPCS3.HDD0Game, Depth: 1},
+	}
+	if a.cfgPath != "" {
+		targets = append(targets, watch.Target{Kind: "config", Root: filepath.Dir(a.cfgPath), Name: filepath.Base(a.cfgPath)})
+	}
+	if gamesYML := a.gamesYMLPath(); gamesYML != "" {
+		targets = append(targets, watch.Target{Kind: "games", Root: filepath.Dir(gamesYML), Name: filepath.Base(gamesYML)})
+	}
+	a.watcher.Set(targets)
+}
+
+func (a *App) onWatchedChange(kind string) {
+	switch kind {
+	case "library":
+		a.emitDownloadLibrary()
+	case "games", "hdd0":
+		a.wailsApp.Event.Emit(EventRPCS3Changed, kind)
+	case "config":
+		a.reloadConfigFile()
+	}
+}
+
+// reloadConfigFile applies config.toml after it was edited outside the app,
+// the same as saving those settings in Settings. The app's own saves read
+// back unchanged and do nothing.
+func (a *App) reloadConfigFile() {
+	if _, err := os.Stat(a.cfgPath); err != nil {
+		return
+	}
+	next, err := config.Load(a.cfgPath)
+	if err != nil {
+		a.activity.Warnf("library", "Ignored an edit to %s: %v", a.cfgPath, err)
+		return
+	}
+	a.cfgMu.Lock()
+	defer a.cfgMu.Unlock()
+	if reflect.DeepEqual(*next, *a.cfg) {
+		return
+	}
+	if err := ensureConfigLibraryDir(next); err != nil {
+		a.activity.Warnf("library", "Ignored an edit to %s: %v", a.cfgPath, err)
+		return
+	}
+	a.activity.Infof("library", "Applied settings changed in %s", a.cfgPath)
+	a.applyConfig(next)
 }
 
 func (a *App) GetConfig() config.Config {
@@ -230,6 +322,8 @@ func (a *App) SaveConfig(next *config.Config) error {
 	if a.cfgPath == "" {
 		return fmt.Errorf("config path not initialized")
 	}
+	a.cfgMu.Lock()
+	defer a.cfgMu.Unlock()
 	if next.Storage.LibraryDir == "" {
 		libraryDir, err := config.DefaultLibraryDir()
 		if err != nil {
@@ -260,13 +354,20 @@ func (a *App) SaveConfig(next *config.Config) error {
 	if err := config.Save(a.cfgPath, next); err != nil {
 		return err
 	}
+	a.applyConfig(next)
+	return nil
+}
+
+// applyConfig makes next the running config and refreshes what depends on
+// it. The caller holds a.cfgMu.
+func (a *App) applyConfig(next *config.Config) {
 	a.cfg = next
 	a.wailsApp.Event.Emit("config:updated", *a.cfg)
 	a.psn = a.newPSN(a.cfg.Network, a.activity)
 	a.jobs.SetLibraryDir(a.cfg.Storage.LibraryDir)
 	a.jobs.SetNetwork(a.cfg.Network)
+	a.watchConfiguredPaths()
 	go a.emitDownloadLibrary()
-	return nil
 }
 
 func (a *App) ActivityLog() []activity.Entry {
@@ -344,14 +445,31 @@ func (a *App) AutoDetectGamesYML() string {
 // path is configured/found, with an error message in the second return so
 // the frontend can render the appropriate empty state.
 func (a *App) ListRPCS3Library() ([]rpcs3.Entry, error) {
-	path := a.cfg.RPCS3.GamesYML
-	if path == "" {
-		path = rpcs3.FindGamesYML()
-	}
+	path := a.gamesYMLPath()
 	if path == "" {
 		return []rpcs3.Entry{}, fmt.Errorf("games.yml not configured")
 	}
 	return rpcs3.ParseGamesYML(path)
+}
+
+// gamesYMLPath is the configured games.yml, or the detected one when none is
+// configured.
+func (a *App) gamesYMLPath() string {
+	if path := strings.TrimSpace(a.cfg.RPCS3.GamesYML); path != "" {
+		return path
+	}
+	return rpcs3.FindGamesYML()
+}
+
+// LocalTitlesPS3 reads the part of each Emulator row that comes from local
+// files only (its name and whether its install folder exists), so a change on
+// disk can refresh rows without asking the server again.
+func (a *App) LocalTitlesPS3(entries []rpcs3.Entry) []library.LocalTitle {
+	titles := make([]library.LocalTitle, 0, len(entries))
+	for _, entry := range entries {
+		titles = append(titles, library.LocalTitlePS3(entry, a.cfg.RPCS3.HDD0Game))
+	}
+	return titles
 }
 
 // ReconcileTitlePS3 resolves one already-parsed RPCS3 row so the frontend can
@@ -529,19 +647,52 @@ func folderCommand(goos, path string) (*exec.Cmd, error) {
 	}
 }
 
-// PendingLibraryPKGsPS3 returns the number of Library PKGs newer than their
-// installed RPCS3 versions.
-func (a *App) PendingLibraryPKGsPS3() (int, error) {
+// PendingLibraryPKGsPS3 returns, per title ID, the number of Library PKGs
+// newer than the title's installed RPCS3 version. Titles with none are left
+// out.
+func (a *App) PendingLibraryPKGsPS3() (map[string]int, error) {
 	pkgs, err := a.pendingLibraryPKGsPS3()
-	return len(pkgs), err
+	if err != nil {
+		return nil, err
+	}
+	counts := make(map[string]int)
+	for _, pkgInfo := range pkgs {
+		counts[pkgInfo.TitleID]++
+	}
+	return counts, nil
 }
 
 // InstallLibraryPKGsPS3 installs only Library PKGs newer than the
 // version currently present in RPCS3.
 func (a *App) InstallLibraryPKGsPS3() (int, error) {
+	return a.installPendingPKGs("")
+}
+
+// InstallTitlePKGsPS3 is InstallLibraryPKGsPS3 for one title.
+func (a *App) InstallTitlePKGsPS3(tid string) (int, error) {
+	if err := psn.ValidateTitleID(tid); err != nil {
+		return 0, err
+	}
+	return a.installPendingPKGs(tid)
+}
+
+// installPendingPKGs installs the pending Library PKGs of titleID, or of
+// every title when titleID is empty.
+func (a *App) installPendingPKGs(titleID string) (int, error) {
+	a.installMu.Lock()
+	defer a.installMu.Unlock()
 	pkgs, err := a.pendingLibraryPKGsPS3()
 	if err != nil {
 		return 0, err
+	}
+	if titleID != "" {
+		mine := pkgs[:0]
+		for _, pkgInfo := range pkgs {
+			if pkgInfo.TitleID == titleID {
+				mine = append(mine, pkgInfo)
+			}
+		}
+		pkgs = mine
 	}
 	if len(pkgs) == 0 {
 		return 0, nil
