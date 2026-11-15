@@ -64,7 +64,7 @@
       <p class="mt-1 text-xs text-muted">PSN, jobs, library, and PKG operations</p>
     </div>
     <div class="flex items-center gap-2">
-      <button onclick={() => (paused = !paused)} class="btn btn-secondary">
+      <button onclick={() => (paused = !paused)} class="btn btn-secondary w-28 justify-center">
         {paused ? 'Resume scroll' : 'Pause scroll'}
       </button>
       <button onclick={clearLog} class="btn btn-secondary">Clear</button>
