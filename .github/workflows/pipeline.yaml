@@ -160,12 +160,12 @@ jobs:
             arch: arm64
             release_arch: aarch64
           - name: macOS Intel
-            runner: macos-26-intel
+            runner: macos-15-intel
             os: darwin
             arch: amd64
             release_arch: x86_64
           - name: macOS Apple Silicon
-            runner: macos-26
+            runner: macos-15
             os: darwin
             arch: arm64
             release_arch: arm64
